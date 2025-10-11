@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JEE 4-Stage Syllabus Progress Tracker</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+
+        /* Styling for the segmented control labels */
+        .radio-stage input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+        .radio-stage label {
+            cursor: pointer; padding: 4px 6px; font-size: 11px; font-weight: 500; text-align: center;
+            border-radius: 4px; transition: all 0.2s; color: #6b7280; white-space: nowrap;
+        }
+        .radio-stage input[type="radio"]:checked + label {
+            color: white; background-color: #3b82f6; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .radio-stage input[type="radio"].stage-0:checked + label { background-color: #94a3b8; }
+        
+        /* Modal Backdrop */
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); z-index: 50; display: none;
+        }
+
+        /* Notification Toast Container */
+        #notification-container {
+            position: fixed; top: 20px; right: 20px; z-index: 60;
+            max-width: 90%; width: 350px;
+        }
+        .notification-toast {
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in forwards 4s;
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px); } }
+
+    </style>
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        setLogLevel('Debug');
+
+        // --- GLOBAL FIREBASE/APP VARIABLES (MANDATORY USE) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = {
+            apiKey: "AIzaSyB9wE0qIEvaueXJzLyIQQmvhyGJC6k-j94",
+            authDomain: "jee-tracker-ead00.firebaseapp.com",
+            projectId: "jee-tracker-ead00",
+            storageBucket: "jee-tracker-ead00.firebasestorage.app",
+            messagingSenderId: "818054839055",
+            appId: "1:818054839055:web:139434c214d335247e5c7a"
+            };
+        
+        let app, db, auth, userId = null;
+        let userProgress = {}; // Stores { 'Physics-Kinematics': 3, 'Math-Circles': 1, ... }
+        let totalTopicsCount = 0;
+        let userProfile = { name: 'User', avatar: '👋' }; // Local profile state
+
+        const AVATAR_EMOJIS = ['🐶', '🐱', '🦊', '🐻', '🐼', '🐨', '🐅', '🐘', '🐒', '🦖', '🦋', '🦉', '🐢', '🍎', '🍓', '🍍', '🍉', '🥝', '🥭', '🍇'];
+        
+        // Stages: 0=Not Started, 1=Lecture, 2=Practice, 3=PYQ, 4=Revision
+        const PROGRESS_STAGES = [
+            { id: 0, label: 'None', key: 'none', color: 'bg-slate-500' },
+            { id: 1, label: 'Lecture', key: 'lecture', color: 'bg-yellow-500' },
+            { id: 2, label: 'Practice', key: 'practice', color: 'bg-orange-500' },
+            { id: 3, label: 'PYQ', key: 'pyq', color: 'bg-purple-500' },
+            { id: 4, label: 'Revision', key: 'revision', color: 'bg-green-500' }
+        ];
+
+        // --- CORE SYLLABUS STRUCTURE (Kept concise for brevity) ---
+        const JEE_SYLLABUS = {
+            Physics: [
+                { name: "Mechanics", topics: ["Units, Dimensions & Errors", "Kinematics", "Newton's Laws of Motion (NLM)", "Rotational Motion"] },
+                { name: "Thermodynamics", topics: ["Thermal Properties", "Thermodynamics", "Waves"] },
+            ],
+            Chemistry: [
+                { name: "Physical Chemistry", topics: ["Mole Concept", "Atomic Structure", "Gaseous State"] },
+                { name: "Organic Chemistry", topics: ["General Organic Chemistry (GOC)", "Hydrocarbons", "Alcohols, Phenols, Ethers"] }
+            ],
+            Mathematics: [
+                { name: "Algebra", topics: ["Sets & Relations", "Complex Numbers", "Quadratic Equations"] },
+                { name: "Calculus", topics: ["Limits & Continuity", "AOD", "Integrals"] }
+            ]
+        };
+
+        // Calculate total topics once
+        Object.values(JEE_SYLLABUS).forEach(groups => {
+            groups.forEach(group => {
+                totalTopicsCount += group.topics.length;
+            });
+        });
+        
+        // --- UTILITY FUNCTIONS ---
+        const generateRandomAvatarEmoji = () => {
+            const randomIndex = Math.floor(Math.random() * AVATAR_EMOJIS.length);
+            return AVATAR_EMOJIS[randomIndex];
+        };
+
+        // --- FIREBASE INITIALIZATION & AUTH ---
+
+        window.onload = async () => {
+            const authStatusElement = document.getElementById('auth-status');
+            
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    authStatusElement.textContent = 'Awaiting Sign-in...';
+
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            // Check if display name is set on Firebase Auth, use it as fallback
+                            userProfile.name = user.displayName || 'New User';
+                            userProfile.email = user.email || 'N/A';
+                            
+                            handleLoginSuccess(user);
+                            loadProgressData(); // Listens for profile and progress updates
+                        } else {
+                            userId = null;
+                            handleLogout();
+                        }
+                    });
+
+                } else {
+                    console.error("Firebase config missing. Running in mock mode.");
+                    authStatusElement.textContent = 'Running in Local/Mock Mode.';
+                    handleLogout(); 
+                }
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                authStatusElement.textContent = `Error: ${error.message}`;
+            }
+        };
+
+        function updateHeaderUI() {
+            const avatarElement = document.getElementById('profile-avatar');
+            const nameElement = document.getElementById('profile-name-display');
+
+            avatarElement.textContent = userProfile.avatar || '❓';
+            nameElement.textContent = userProfile.name || 'User';
+        }
+
+        function handleLoginSuccess(user) {
+            document.getElementById('tracker-ui').classList.remove('hidden');
+            document.getElementById('auth-form-container').classList.add('hidden');
+            document.getElementById('profile-button').classList.remove('hidden');
+            updateHeaderUI();
+        }
+
+        function handleLogout() {
+            document.getElementById('auth-status').textContent = 'Please Sign In or Create an Account.';
+            document.getElementById('tracker-ui').classList.add('hidden');
+            document.getElementById('auth-form-container').classList.remove('hidden');
+            document.getElementById('profile-button').classList.add('hidden');
+            document.getElementById('syllabus-content').innerHTML = '<div class="md:col-span-3 text-center p-12 text-gray-500">Sign in to load your progress tracker.</div>';
+            userProgress = {};
+            userProfile = { name: 'User', avatar: '👋' };
+            updateOverallProgress(); 
+            updateHeaderUI();
+        }
+
+        async function authenticateUser(isSignUp) {
+            const emailInput = document.getElementById('email').value.trim();
+            const passwordInput = document.getElementById('password').value;
+            const displayNameInput = document.getElementById('display-name').value.trim();
+            const errorDisplay = document.getElementById('auth-error');
+            errorDisplay.textContent = '';
+
+            if (!emailInput || !passwordInput) {
+                errorDisplay.textContent = 'Please enter both email and password.';
+                return;
+            }
+            if (isSignUp && !displayNameInput) {
+                errorDisplay.textContent = 'Please choose a display name for your profile.';
+                return;
+            }
+
+            try {
+                if (isSignUp) {
+                    const userCredential = await createUserWithEmailAndPassword(auth, emailInput, passwordInput);
+                    const user = userCredential.user;
+                    
+                    // 1. Update Firebase Auth Profile (for immediate name display)
+                    await updateProfile(user, { displayName: displayNameInput });
+
+                    // 2. Initialize Firestore Profile (for avatar and persistence)
+                    const randomAvatar = generateRandomAvatarEmoji();
+                    await initializeUserProfile(user.uid, displayNameInput, randomAvatar);
+
+                    showNotification('Account Created!', `Welcome, ${displayNameInput}! Your avatar is ${randomAvatar}.`, 'bg-indigo-600');
+
+                } else {
+                    await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+                }
+            } catch (error) {
+                errorDisplay.textContent = `Authentication failed: ${error.message}`;
+                console.error("Auth Error:", error);
+            }
+        }
+
+        async function signInWithGoogle() {
+            const errorDisplay = document.getElementById('auth-error');
+            errorDisplay.textContent = '';
+            try {
+                const provider = new GoogleAuthProvider();
+                const result = await signInWithPopup(auth, provider);
+                const user = result.user;
+
+                // Check if user is newly created or existing
+                if (result.additionalUserInfo.isNewUser) {
+                    const randomAvatar = generateRandomAvatarEmoji();
+                    const name = user.displayName || 'Google User';
+                    await initializeUserProfile(user.uid, name, randomAvatar);
+                    showNotification('Account Created!', `Welcome, ${name}! Your avatar is ${randomAvatar}.`, 'bg-indigo-600');
+                }
+
+            } catch (error) {
+                errorDisplay.textContent = `Google Sign-In failed: ${error.message}`;
+                console.error("Google Auth Error:", error);
+            }
+        }
+
+        async function signOutUser() {
+            try {
+                await signOut(auth);
+                closeModal('profile-modal');
+                showNotification('Signed Out', 'You have successfully signed out.', 'bg-yellow-500');
+            } catch (error) {
+                console.error("Sign Out Error:", error);
+            }
+        }
+
+        // --- FIREBASE DATA FUNCTIONS ---
+
+        const getProgressDocRef = () => {
+            if (!db || !userId) return null;
+            // Private data storage
+            const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_tracker`; 
+            return doc(db, userPath, "progress");
+        };
+
+        const initializeUserProfile = async (uid, name, avatar) => {
+            const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_tracker`, "progress");
+            await setDoc(docRef, { 
+                profile: { name, avatar, createdAt: new Date().toISOString() },
+                topics: {} // Initialize empty topics object
+            }, { merge: true });
+        };
+
+        const loadProgressData = () => {
+            const progressDocRef = getProgressDocRef();
+            if (!progressDocRef) return;
+
+            // This single listener handles both profile and progress updates
+            onSnapshot(progressDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    // 1. Update Profile State
+                    if (data.profile) {
+                        userProfile.name = data.profile.name || auth.currentUser.displayName || 'User';
+                        userProfile.avatar = data.profile.avatar || '❓';
+                        userProfile.email = auth.currentUser.email; // Ensure email is current
+                        updateHeaderUI();
+                    }
+
+                    // 2. Update Progress State
+                    userProgress = data.topics || {};
+
+                } else {
+                    // This happens for a brand new user who just signed up via custom email/password 
+                    // and hasn't had their profile initialized or if data was deleted.
+                    console.log("No progress document found. Initializing profile with default values.");
+                    const name = auth.currentUser?.displayName || 'New User';
+                    const avatar = generateRandomAvatarEmoji();
+                    initializeUserProfile(userId, name, avatar);
+                }
+                
+                renderSyllabusUI();
+                updateOverallProgress();
+
+            }, (error) => {
+                console.error("Error listening to progress data:", error);
+            });
+        };
+
+        const updateProgressInFirestore = async (topicKey, stage) => {
+            if (!db || !userId) {
+                console.error("Cannot save data: User not authenticated.");
+                return;
+            }
+
+            const docRef = getProgressDocRef();
+            const previousStage = userProgress[topicKey] || 0;
+            
+            // Optimistically update local state
+            userProgress[topicKey] = stage;
+
+            // Check for completion achievement
+            if (stage === 4 && previousStage < 4) {
+                showNotification('Topic Complete!', `Congrats! You finished the **${topicKey.split('-')[1]}** revision milestone.`, 'bg-green-600');
+            }
+            
+            // Check for 100% syllabus completion
+            const totalRevised = Object.values(userProgress).filter(s => s === 4).length;
+            if (totalRevised === totalTopicsCount) {
+                showNotification('Syllabus Mastered!', '🥳 You completed all JEE topics! You are ready for the exam!', 'bg-indigo-600', 8000);
+            }
+
+            try {
+                await updateDoc(docRef, { [`topics.${topicKey}`]: stage });
+            } catch (error) {
+                console.error("Error updating document:", error);
+            }
+        };
+
+        async function updateUserName(newName) {
+            if (!auth.currentUser) return;
+            
+            try {
+                // 1. Update Firebase Auth profile
+                await updateProfile(auth.currentUser, { displayName: newName });
+                
+                // 2. Update Firestore document
+                const docRef = getProgressDocRef();
+                await updateDoc(docRef, { 
+                    'profile.name': newName 
+                });
+
+                // Success notification and UI update handled by onSnapshot listener
+                showNotification('Profile Updated', `Your name is now **${newName}**!`, 'bg-blue-500');
+                closeModal('profile-modal');
+
+            } catch (error) {
+                console.error("Error updating profile:", error);
+                document.getElementById('profile-error').textContent = `Failed to update name: ${error.message}`;
+            }
+        }
+
+        // --- UI RENDERING & LOGIC ---
+
+        function showNotification(title, message, bgColor, duration = 4000) {
+            const container = document.getElementById('notification-container');
+            const toast = document.createElement('div');
+            toast.className = `notification-toast p-4 mb-3 rounded-lg shadow-xl text-white ${bgColor}`;
+            toast.innerHTML = `
+                <div class="font-bold text-lg mb-1">${title}</div>
+                <div class="text-sm">${message}</div>
+            `;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.remove(), 500); // Remove after fade out animation
+            }, duration);
+        }
+
+        function updateOverallProgress() {
+            // ... (Progress calculation logic remains the same)
+            let analysis = {
+                overall: { totalTopics: totalTopicsCount, totalStages: totalTopicsCount * 4, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } },
+                subjects: { Physics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Chemistry: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Mathematics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } } }
+            };
+            
+            Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
+                groups.forEach(group => {
+                    group.topics.forEach(topic => {
+                        const topicKey = `${subject}-${topic}`;
+                        const stage = userProgress[topicKey] || 0;
+                        
+                        const sub = analysis.subjects[subject];
+                        sub.totalTopics++;
+                        sub.totalStages += 4;
+                        sub.completedStages += stage;
+                        sub.stages[stage]++;
+
+                        analysis.overall.completedStages += stage;
+                        analysis.overall.stages[stage]++;
+                    });
+                });
+            });
+
+            const calculatePercentage = (completed, total) => total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+
+            analysis.overall.percentage = calculatePercentage(analysis.overall.completedStages, analysis.overall.totalStages);
+            Object.keys(analysis.subjects).forEach(subject => {
+                const data = analysis.subjects[subject];
+                data.percentage = calculatePercentage(data.completedStages, data.totalStages);
+            });
+            
+            // 3. Update UI
+            const topicsCompleted = analysis.overall.stages[4];
+            const overallPercentage = analysis.overall.percentage;
+
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const topicsCompletedDisplay = document.getElementById('topics-completed');
+            const totalTopicsDisplay = document.getElementById('total-topics');
+
+
+            if (progressBar) {
+                progressBar.style.width = `${overallPercentage}%`;
+                progressText.textContent = `Overall Progress: ${overallPercentage}% (${analysis.overall.completedStages}/${analysis.overall.totalStages} milestones)`;
+                topicsCompletedDisplay.textContent = `${topicsCompleted}`;
+                totalTopicsDisplay.textContent = `${totalTopicsCount}`;
+
+
+                let colorClass = 'bg-red-500';
+                if (overallPercentage > 25) colorClass = 'bg-orange-500';
+                if (overallPercentage > 50) colorClass = 'bg-yellow-500';
+                if (overallPercentage > 75) colorClass = 'bg-green-500';
+
+                progressBar.className = `h-4 rounded-full transition-all duration-500 ease-out ${colorClass}`;
+            }
+            
+            ['Physics', 'Chemistry', 'Mathematics'].forEach(subject => {
+                const data = analysis.subjects[subject];
+                if(document.getElementById(`${subject.toLowerCase()}-progress`)) {
+                    document.getElementById(`${subject.toLowerCase()}-progress`).textContent = `${data.percentage}%`;
+                    document.getElementById(`${subject.toLowerCase()}-total-topics`).textContent = `${data.totalTopics} Topics`;
+                    document.getElementById(`${subject.toLowerCase()}-bar`).style.width = `${data.percentage}%`;
+                }
+            });
+            
+            renderStageAnalysis(analysis);
+        }
+
+        function renderStageAnalysis(analysis) {
+            const stageAnalysisContainer = document.getElementById('stage-analysis-content');
+            if (!stageAnalysisContainer) return;
+            
+            let stageHtml = '';
+            const stageMapping = { 1: 'Lecture', 2: 'Practice', 3: 'PYQ', 4: 'Revision' };
+            
+            // Overall Backlog Summary
+            let overallBacklogHtml = '';
+            for (let i = 1; i <= 4; i++) {
+                const stageCount = analysis.overall.stages[i];
+                if (stageCount > 0) {
+                    const stageLabel = stageMapping[i];
+                    let bgColor = 'bg-gray-200';
+                    if (i === 1) bgColor = 'bg-yellow-100 text-yellow-800';
+                    else if (i === 2) bgColor = 'bg-orange-100 text-orange-800';
+                    else if (i === 3) bgColor = 'bg-purple-100 text-purple-800';
+                    else if (i === 4) bgColor = 'bg-green-100 text-green-800';
+
+                    overallBacklogHtml += `<span class="inline-flex items-center px-3 py-1 rounded-full text-base font-bold ${bgColor} mr-3 mb-2">
+                                        ${stageCount} @ ${stageLabel}
+                                    </span>`;
+                }
+            }
+
+            // Subject-wise cards
+            Object.entries(analysis.subjects).forEach(([subject, data]) => {
+                let backlogHtml = '';
+                for (let i = 1; i <= 4; i++) {
+                    const stageCount = data.stages[i];
+                    if (stageCount > 0) {
+                        const stageLabel = stageMapping[i];
+                        let bgColor = 'bg-gray-200';
+                        if (i === 1) bgColor = 'bg-yellow-100 text-yellow-800';
+                        else if (i === 2) bgColor = 'bg-orange-100 text-orange-800';
+                        else if (i === 3) bgColor = 'bg-purple-100 text-purple-800';
+                        else if (i === 4) bgColor = 'bg-green-100 text-green-800';
+
+                        backlogHtml += `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgColor} mr-2 mb-1">
+                                            ${stageCount} @ ${stageLabel}
+                                        </span>`;
+                    }
+                }
+                
+                stageHtml += `
+                    <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-sky-500">
+                        <h4 class="text-xl font-bold text-sky-800 mb-3">${subject} (${data.totalTopics} Topics)</h4>
+                        <p class="text-sm font-semibold text-gray-700 mb-2">Current Milestones:</p>
+                        <div class="flex flex-wrap">
+                            ${backlogHtml || '<span class="text-gray-400 text-sm">No topics started or all revised.</span>'}
+                        </div>
+                    </div>
+                `;
+            });
+
+            stageAnalysisContainer.innerHTML = `
+                <div class="md:col-span-3">
+                    <h3 class="text-2xl font-extrabold text-indigo-700 mb-4 border-b pb-2">Overall Backlog Summary</h3>
+                    <div class="flex flex-wrap p-4 bg-indigo-50 rounded-xl shadow-inner mb-6">
+                        ${overallBacklogHtml || '<span class="text-gray-400 font-bold">No milestones started yet!</span>'}
+                    </div>
+                </div>
+                ${stageHtml}
+            `;
+        }
+
+
+        function handleStageChange(event) {
+            const topicKey = event.target.name; 
+            const stage = parseInt(event.target.value, 10);
+            updateProgressInFirestore(topicKey, stage);
+        };
+
+        function renderSyllabusUI() {
+            const container = document.getElementById('syllabus-content');
+            container.innerHTML = ''; 
+
+            Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
+                const subjectCard = document.createElement('div');
+                subjectCard.className = 'bg-white p-4 sm:p-6 rounded-xl shadow-2xl border-t-8 border-sky-600 transition duration-500 hover:shadow-sky-300/50';
+
+                const subjectTitle = document.createElement('h2');
+                subjectTitle.className = 'text-2xl sm:text-3xl font-extrabold text-sky-700 mb-4 border-b-2 pb-2';
+                subjectTitle.textContent = subject;
+                subjectCard.appendChild(subjectTitle);
+
+                groups.forEach(group => {
+                    const groupSection = document.createElement('div');
+                    groupSection.className = 'mb-6 p-4 bg-gray-50 rounded-xl shadow-inner';
+
+                    const groupTitle = document.createElement('h3');
+                    groupTitle.className = 'text-lg font-bold text-sky-800 mb-3 border-b pb-1';
+                    groupTitle.textContent = group.name;
+                    groupSection.appendChild(groupTitle);
+
+                    const topicsList = document.createElement('div');
+                    topicsList.className = 'space-y-3';
+
+                    group.topics.forEach(topic => {
+                        const topicKey = `${subject}-${topic}`;
+                        const currentStage = userProgress[topicKey] || 0;
+
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-gray-100 shadow-sm';
+
+                        const label = document.createElement('span');
+                        label.className = `text-base font-medium text-gray-800 w-full sm:w-1/2 mr-4 ${currentStage === 4 ? 'line-through text-gray-500' : ''}`;
+                        label.textContent = topic;
+                        itemDiv.appendChild(label);
+
+                        // Stage Segmented Control
+                        const stageControl = document.createElement('div');
+                        stageControl.className = 'radio-stage flex flex-wrap justify-start sm:justify-end space-x-1 p-1 bg-gray-100 rounded-md mt-2 sm:mt-0 shadow-inner';
+
+                        // Add "Reset to None" (Stage 0) first
+                        const resetRadioId = `${topicKey}-0`;
+                        const isResetChecked = currentStage === 0;
+                        const resetInput = document.createElement('input');
+                        resetInput.type = 'radio';
+                        resetInput.id = resetRadioId;
+                        resetInput.name = topicKey;
+                        resetInput.value = 0;
+                        resetInput.checked = isResetChecked;
+                        resetInput.className = `stage-0`;
+                        resetInput.addEventListener('change', handleStageChange);
+                        const resetLabel = document.createElement('label');
+                        resetLabel.htmlFor = resetRadioId;
+                        resetLabel.textContent = 'Reset';
+                        stageControl.appendChild(resetInput);
+                        stageControl.appendChild(resetLabel);
+
+                        PROGRESS_STAGES.filter(s => s.id > 0).forEach(stage => {
+                            const radioId = `${topicKey}-${stage.id}`;
+                            const isChecked = currentStage === stage.id;
+
+                            const input = document.createElement('input');
+                            input.type = 'radio';
+                            input.id = radioId;
+                            input.name = topicKey; 
+                            input.value = stage.id;
+                            input.checked = isChecked;
+                            input.className = `stage-${stage.id}`;
+                            input.addEventListener('change', handleStageChange);
+
+                            const labelEl = document.createElement('label');
+                            labelEl.htmlFor = radioId;
+                            labelEl.textContent = stage.label;
+                            
+                            stageControl.appendChild(input);
+                            stageControl.appendChild(labelEl);
+                        });
+
+
+                        itemDiv.appendChild(stageControl);
+                        topicsList.appendChild(itemDiv);
+                    });
+
+                    groupSection.appendChild(topicsList);
+                    subjectCard.appendChild(groupSection);
+                });
+                container.appendChild(subjectCard);
+            });
+        };
+
+        // Modal Functions
+        window.openModal = (modalId) => {
+            document.getElementById(modalId).style.display = 'flex';
+            document.getElementById(`${modalId}-backdrop`).style.display = 'block';
+            if (modalId === 'profile-modal') {
+                document.getElementById('profile-modal-avatar').textContent = userProfile.avatar;
+                document.getElementById('profile-modal-name').textContent = userProfile.name;
+                document.getElementById('profile-modal-email').textContent = userProfile.email || 'N/A';
+                document.getElementById('profile-modal-uid').textContent = auth.currentUser ? auth.currentUser.uid : 'N/A';
+                document.getElementById('edit-name-input').value = userProfile.name;
+                document.getElementById('profile-error').textContent = '';
+            }
+        }
+
+        window.closeModal = (modalId) => {
+            document.getElementById(modalId).style.display = 'none';
+            document.getElementById(`${modalId}-backdrop`).style.display = 'none';
+        }
+        
+        window.saveProfileName = () => {
+            const newName = document.getElementById('edit-name-input').value.trim();
+            if (newName && newName !== userProfile.name) {
+                updateUserName(newName);
+            } else {
+                document.getElementById('profile-error').textContent = 'Please enter a valid, new display name.';
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen">
+    <div id="notification-container">
+        <!-- Toast notifications appear here -->
+    </div>
+    <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border-b-4 border-indigo-600 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE 4-Stage Tracker</h1>
+                <p class="text-base sm:text-lg text-gray-600">Track milestones: **Lecture, Practice, PYQ, Revision**.</p>
+            </div>
+            <button id="profile-button" onclick="openModal('profile-modal')" class="hidden bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-md transition duration-200 flex items-center">
+                <span id="profile-avatar" class="text-xl mr-2 leading-none">👋</span>
+                <span id="profile-name-display">Profile</span>
+            </button>
+        </header>
+
+        <!-- Authentication and User Info Bar -->
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-8 p-3 bg-indigo-50 rounded-lg shadow-inner text-sm text-indigo-700">
+            <span id="auth-status" class="font-medium">Initializing authentication...</span>
+        </div>
+
+        <!-- AUTHENTICATION FORM (Shown when logged out) -->
+        <div id="auth-form-container" class="hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-2xl border-t-4 border-red-500 mb-10">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Sign In or Sign Up</h2>
+            <div id="auth-error" class="text-red-500 text-sm mb-4 font-medium"></div>
+
+            <input type="text" id="display-name" placeholder="Choose a Display Name (for Sign Up)" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            <input type="email" id="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            <input type="password" id="password" placeholder="Password (min 6 characters)" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            
+            <div class="flex space-x-4 mb-6">
+                <button onclick="authenticateUser(false)" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition shadow-md">
+                    Sign In
+                </button>
+                <button onclick="authenticateUser(true)" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition shadow-md">
+                    Sign Up (Gets Random Avatar)
+                </button>
+            </div>
+
+            <div class="relative flex items-center justify-center my-6">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-300"></div>
+                </div>
+                <div class="relative bg-white px-3 text-gray-500">
+                    OR
+                </div>
+            </div>
+
+            <button onclick="signInWithGoogle()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition shadow-md flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 48 48">
+                    <path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 12.9 2 4 10.9 4 22c0 11.1 8.9 20 20 20s20-8.9 20-20v-2z"/>
+                </svg>
+                Sign In with Google
+            </button>
+        </div>
+
+        <!-- MAIN TRACKER UI (Hidden when logged out) -->
+        <div id="tracker-ui" class="hidden">
+            
+            <!-- Overall Progress Card -->
+            <div id="progress-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-indigo-500">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="flex flex-col p-3 bg-blue-50 rounded-lg">
+                        <span class="text-lg font-bold text-gray-800">Total Topics:</span>
+                        <span id="total-topics" class="text-3xl font-extrabold text-blue-600">--</span>
+                    </div>
+                    <div class="flex flex-col p-3 bg-green-50 rounded-lg">
+                        <span class="text-lg font-bold text-gray-800">Topics Revised (4/4):</span>
+                        <span id="topics-completed" class="text-3xl font-extrabold text-green-600">--</span>
+                    </div>
+                    <div class="flex flex-col p-3 bg-indigo-50 rounded-lg">
+                        <span class="text-lg font-bold text-gray-800">Overall Milestone Progress:</span>
+                        <span id="progress-text" class="text-xl font-extrabold text-indigo-600 mt-1">Loading progress...</span>
+                    </div>
+                </div>
+                
+                <!-- Overall Progress Bar -->
+                <div class="w-full bg-gray-200 rounded-full h-4 mb-6">
+                    <div id="progress-bar" class="h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+
+                <!-- Subject-wise Percentage Breakdown -->
+                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-1">Subject Breakdown</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <!-- Physics -->
+                    <div class="p-3 bg-sky-50 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-semibold text-sky-700">Physics</span>
+                            <span id="physics-progress" class="text-xl font-extrabold text-sky-600">--%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="physics-bar" class="h-2 rounded-full bg-sky-500" style="width: 0%"></div>
+                        </div>
+                        <span id="physics-total-topics" class="text-xs text-gray-500 mt-1 block">-- Topics</span>
+                    </div>
+
+                    <!-- Chemistry -->
+                    <div class="p-3 bg-fuchsia-50 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-semibold text-fuchsia-700">Chemistry</span>
+                            <span id="chemistry-progress" class="text-xl font-extrabold text-fuchsia-600">--%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="chemistry-bar" class="h-2 rounded-full bg-fuchsia-500" style="width: 0%"></div>
+                        </div>
+                        <span id="chemistry-total-topics" class="text-xs text-gray-500 mt-1 block">-- Topics</span>
+                    </div>
+
+                    <!-- Mathematics -->
+                    <div class="p-3 bg-amber-50 rounded-lg shadow-md">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-semibold text-amber-700">Mathematics</span>
+                            <span id="mathematics-progress" class="text-xl font-extrabold text-amber-600">--%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="mathematics-bar" class="h-2 rounded-full bg-amber-500" style="width: 0%"></div>
+                        </div>
+                        <span id="mathematics-total-topics" class="text-xs text-gray-500 mt-1 block">-- Topics</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage Analysis Card -->
+            <div id="analysis-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-purple-500">
+                <h2 class="text-2xl font-black text-purple-700 mb-4">Topic Stage Analysis</h2>
+                <p class="text-gray-600 mb-6">This breakdown shows the number of topics currently stuck at a specific milestone.</p>
+                
+                <div id="stage-analysis-content" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="md:col-span-3 text-center p-8 text-gray-400">Loading analysis...</div>
+                </div>
+            </div>
+
+
+            <!-- Syllabus Content -->
+            <div id="syllabus-content" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Syllabus content generated by renderSyllabusUI function -->
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 text-center text-sm text-gray-500 border-t pt-4">
+            <p>Stages: 1=Lecture, 2=Practice, 3=PYQ, 4=Revision. Progress is saved automatically via Firestore.</p>
+        </footer>
+    </div>
+    
+    <!-- Profile Modal -->
+    <div id="profile-modal-backdrop" class="modal-backdrop" onclick="closeModal('profile-modal')"></div>
+    <div id="profile-modal" class="modal-backdrop flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center border-b pb-3 mb-6">
+                <h3 class="text-2xl font-bold text-indigo-700">User Profile</h3>
+                <button onclick="closeModal('profile-modal')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            
+            <!-- Avatar and Name Display -->
+            <div class="flex items-center mb-6 border-b pb-4">
+                <div id="profile-modal-avatar" class="text-6xl p-3 bg-indigo-100 rounded-full leading-none shadow-inner">
+                    ❓
+                </div>
+                <div class="ml-4">
+                    <p id="profile-modal-name" class="text-2xl font-bold text-gray-800">Loading...</p>
+                    <p class="text-sm text-gray-500">Your Study Companion</p>
+                </div>
+            </div>
+            
+            <!-- Profile Details -->
+            <div class="space-y-4 mb-8">
+                <p class="text-lg">
+                    <span class="font-semibold text-gray-700 block">Email:</span>
+                    <span id="profile-modal-email" class="font-mono text-indigo-500">Loading...</span>
+                </p>
+                
+                <!-- Name Edit Section -->
+                <div class="pt-4">
+                    <label for="edit-name-input" class="font-semibold text-gray-700 block mb-2">Change Display Name:</label>
+                    <div class="flex">
+                        <input type="text" id="edit-name-input" class="w-full p-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500" value="">
+                        <button onclick="saveProfileName()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-r-lg transition">
+                            Save
+                        </button>
+                    </div>
+                    <div id="profile-error" class="text-red-500 text-sm mt-2 font-medium"></div>
+                </div>
+            </div>
+
+            <button onclick="signOutUser()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition shadow-md">
+                Sign Out
+            </button>
+        </div>
+    </div>
+</body>
+</html>
