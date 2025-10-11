@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JEE PROGRESS TRACKER </title>
+    <title>JEE 4-Stage Independent Progress Tracker</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Inter font -->
@@ -14,20 +14,12 @@
             background-color: #f7f9fc;
         }
 
-        /* Styling for the segmented control labels */
-        .radio-stage input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
-        .radio-stage label {
-            cursor: pointer; padding: 4px 6px; font-size: 11px; font-weight: 500; text-align: center;
-            border-radius: 4px; transition: all 0.2s; color: #6b7280; white-space: nowrap;
-        }
-        /* Updated color styles for each stage */
-        .radio-stage input[type="radio"]:checked + label { color: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
-        .radio-stage input[type="radio"].stage-0:checked + label { background-color: #94a3b8; } /* Reset - Gray */
-        .radio-stage input[type="radio"].stage-1:checked + label { background-color: #f59e0b; } /* Lecture - Yellow */
-        .radio-stage input[type="radio"].stage-2:checked + label { background-color: #ea580c; } /* Practice - Orange */
-        .radio-stage input[type="radio"].stage-3:checked + label { background-color: #9333ea; } /* PYQ - Purple */
-        .radio-stage input[type="radio"].stage-4:checked + label { background-color: #10b981; } /* Revision - Green */
-        
+        /* Specific colors for stages (used for background and text based on completion) */
+        .stage-lecture-color { @apply bg-yellow-500; }
+        .stage-practice-color { @apply bg-orange-500; }
+        .stage-pyq-color { @apply bg-purple-500; }
+        .stage-revision-color { @apply bg-green-500; }
+
         /* Notification Toast Container */
         #notification-container {
             position: fixed; top: 20px; right: 20px; z-index: 60;
@@ -65,22 +57,24 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
         let app, db, auth, userId = null;
+        // userProgress now stores an object for each topic, not a single number
         let userProgress = {}; 
         let totalTopicsCount = 0;
         let userProfile = { name: 'Anonymous User', avatar: '🚀' }; 
+        // Filter now uses the stage key (e.g., 'lecture', 'pyq')
+        let currentFilterKey = null; 
 
         const AVATAR_EMOJIS = ['🐶', '🐱', '🦊', '🐻', '🐼', '🐨', '🐅', '🐘', '🐒', '🦖', '🦋', '🦉', '🐢', '🍎', '🍓', '🍍', '🍉', '🥝', '🥭', '🍇'];
         
-        // Stages: 0=Not Started, 1=Lecture, 2=Practice, 3=PYQ, 4=Revision
-        const PROGRESS_STAGES = [
-            { id: 0, label: 'None', key: 'none', color: 'bg-slate-500' },
-            { id: 1, label: 'Lecture', key: 'lecture', color: 'bg-yellow-500' },
-            { id: 2, label: 'Practice', key: 'practice', color: 'bg-orange-500' },
-            { id: 3, label: 'PYQ', key: 'pyq', color: 'bg-purple-500' },
-            { id: 4, label: 'Revision', key: 'revision', color: 'bg-green-500' }
+        // Structure defining the 4 independent stages (icon property removed)
+        const STAGE_KEYS = [
+            { key: 'lecture', label: 'Lecture', colorClass: 'stage-lecture-color' },
+            { key: 'practice', label: 'Practice', colorClass: 'stage-practice-color' },
+            { key: 'pyq', label: 'PYQ', colorClass: 'stage-pyq-color' },
+            { key: 'revision', label: 'Revision', colorClass: 'stage-revision-color' }
         ];
 
-        // --- UPDATED CORE SYLLABUS STRUCTURE ---
+        // --- CORE SYLLABUS STRUCTURE (unchanged) ---
         const JEE_SYLLABUS = {
             Physics: [
                 { name: "Mechanics", topics: ["Units, Dimensions & Errors","Errors and measurements", "Motion in 1D","Motion in 2D", "Newton's Laws of Motion (NLM)","Work Power Energy","Centre of mass", "Rotational Motion","Mechanical Properties of Solid","Mechanical Properties of Fluid"] },
@@ -116,7 +110,7 @@
             userId = 'UNAUTHENTICATED';
             
             const authStatusElement = document.getElementById('auth-status');
-            authStatusElement.innerHTML = `<span class="font-bold text-red-700">FATAL AUTH ERROR (Saving Disabled):</span> ${errorMessage}. <br> You must enable **Anonymous Authentication** in your Firebase Console to save progress automatically.`;
+            authStatusElement.innerHTML = `<span class="font-bold text-red-700">FATAL AUTH ERROR (Saving Disabled):</span> ${errorMessage}. <br> Enable **Anonymous Authentication** in Firebase to save progress automatically.`;
 
             const headerElement = document.getElementById('session-display');
             headerElement.innerHTML = `
@@ -219,17 +213,19 @@
             return AVATAR_EMOJIS[randomIndex];
         };
 
+        const calculatePercentage = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+
+
         // --- FIREBASE DATA FUNCTIONS ---
 
         const getProgressDocRef = () => {
             if (!db || !userId || userId === 'UNAUTHENTICATED') return null;
-            // Private data storage path: /artifacts/{appId}/users/{userId}/jee_4stage_tracker
-            const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_tracker`; 
+            const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_independent_tracker`; 
             return doc(db, userPath, "progress");
         };
 
         const initializeUserProfile = async (uid, name, avatar) => {
-            const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_tracker`, "progress");
+            const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_independent_tracker`, "progress");
             try {
                 await setDoc(docRef, { 
                     profile: { name, avatar, createdAt: new Date().toISOString() },
@@ -259,7 +255,7 @@
                              updateHeaderUI();
                         }
                     }
-
+                    // Load the new object-based progress structure
                     userProgress = data.topics || {};
 
                 } else {
@@ -267,6 +263,7 @@
                     initializeUserProfile(userId, userProfile.name, userProfile.avatar);
                 }
                 
+                renderFilterStatus(); // Update filter display
                 renderSyllabusUI();
                 updateOverallProgress();
 
@@ -275,38 +272,79 @@
             });
         };
 
-        const updateProgressInFirestore = async (topicKey, stage) => {
+        window.toggleStageCompletion = function(topicKey, stageKey) {
+            // Get current status, or default to false
+            const isCompleted = userProgress[topicKey]?.[stageKey] || false;
+            const newStatus = !isCompleted;
+            
+            // Optimistically update local state
+            userProgress[topicKey] = { ...(userProgress[topicKey] || {}), [stageKey]: newStatus };
+            
+            // Re-render UI immediately for responsiveness
+            renderSyllabusUI();
+            updateOverallProgress(); 
+            
+            // Save to Firestore
+            updateProgressInFirestore(topicKey, stageKey, newStatus);
+        }
+
+        const updateProgressInFirestore = async (topicKey, stageKey, newStatus) => {
             if (!db || !userId || userId === 'UNAUTHENTICATED') {
                 console.error("Cannot save data: User not authenticated.");
-                showNotification('Save Error', 'Cannot save data. Session not established. Check status bar for error.', 'bg-red-500');
+                showNotification('Save Error', 'Cannot save data. Session not established.', 'bg-red-500');
                 return;
             }
 
             const docRef = getProgressDocRef();
-            const previousStage = userProgress[topicKey] || 0;
             
-            // Optimistically update local state
-            userProgress[topicKey] = stage;
-
-            if (stage === 4 && previousStage < 4) {
-                showNotification('Topic Complete!', `Congrats! You finished the **${topicKey.split('-')[1]}** revision milestone.`, 'bg-green-600');
-            }
-            
-            // Check for total completion based on the new stage 4 count
-            const totalRevised = Object.values(userProgress).filter(s => s === 4).length;
-            if (totalRevised === totalTopicsCount) {
-                showNotification('Syllabus Mastered!', '🥳 You completed all JEE topics! You are ready for the exam!', 'bg-indigo-600', 8000);
-            }
-
             try {
-                await updateDoc(docRef, { [`topics.${topicKey}`]: stage });
+                // Use the new path structure: topics["topic-key"][stageKey] = newStatus
+                await updateDoc(docRef, { [`topics.${topicKey}.${stageKey}`]: newStatus });
+                
+                if (stageKey === 'revision' && newStatus) {
+                    showNotification('Milestone Achieved!', `Revision for **${topicKey.split('-')[1]}** is complete!`, 'bg-green-600');
+                }
             } catch (error) {
                 console.error("Error updating document:", error);
                 showNotification('Database Write Failed', 'There was an issue saving your progress. Check console for details.', 'bg-red-700');
             }
         };
 
-        // --- UI RENDERING & LOGIC (Updated for 4-Bar Analysis) ---
+        // --- FILTER LOGIC ---
+        window.setFilter = function(stageKey) {
+            if (currentFilterKey === stageKey) {
+                // Toggle off if already active
+                currentFilterKey = null;
+            } else {
+                currentFilterKey = stageKey;
+            }
+            renderFilterStatus(); 
+            renderSyllabusUI(); 
+            updateOverallProgress(); 
+        }
+
+        function renderFilterStatus() {
+            const filterStatus = document.getElementById('filter-status');
+            if (currentFilterKey === null) {
+                filterStatus.classList.add('hidden');
+                filterStatus.innerHTML = '';
+            } else {
+                const stage = STAGE_KEYS.find(s => s.key === currentFilterKey);
+                filterStatus.classList.remove('hidden');
+                filterStatus.innerHTML = `
+                    <div class="flex items-center justify-between w-full p-4 bg-yellow-100 rounded-xl shadow border border-yellow-300">
+                        <span class="font-bold text-lg text-yellow-800">Filter Active:</span> 
+                        <span class="text-md text-yellow-700">Showing only topics where **${stage.label}** is completed.</span>
+                        <button onclick="setFilter(null)" class="ml-4 px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 transition duration-150 shadow-md">
+                            Reset Filter ❌
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+
+        // --- UI RENDERING & LOGIC ---
 
         function showNotification(title, message, bgColor, duration = 4000) {
             const container = document.getElementById('notification-container');
@@ -327,69 +365,54 @@
             }, 0); 
         }
 
-        const calculatePercentage = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-
         function updateOverallProgress() {
             let analysis = {
                 totalTopics: totalTopicsCount,
                 completedRevisionTopics: 0,
-                completedMilestones: 0, // Kept for subject breakdown
-                totalMilestones: totalTopicsCount * 4,
                 
-                // New 4-Bar metrics
-                progressByStage: {
-                    1: { label: 'Lecture', count: 0, percentage: 0, color: 'bg-yellow-500', icon: '📝' },
-                    2: { label: 'Practice', count: 0, percentage: 0, color: 'bg-orange-500', icon: '🧠' },
-                    3: { label: 'PYQ', count: 0, percentage: 0, color: 'bg-purple-500', icon: '🏆' },
-                    4: { label: 'Revision', count: 0, percentage: 0, color: 'bg-green-500', icon: '✅' }
-                },
+                // Track completion count for each independent stage
+                progressByStage: STAGE_KEYS.reduce((acc, stage) => {
+                    acc[stage.key] = { label: stage.label, count: 0, percentage: 0, colorClass: stage.colorClass };
+                    return acc;
+                }, {}),
 
-                // Subject breakdown uses old milestone calculation
-                subjects: { Physics: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Chemistry: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Mathematics: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } } }
+                // For subject breakdown, we track total completed *stages* (4 stages per topic)
+                subjects: { Physics: { totalTopics: 0, completedStages: 0, percentage: 0 }, Chemistry: { totalTopics: 0, completedStages: 0, percentage: 0 }, Mathematics: { totalTopics: 0, completedStages: 0, percentage: 0 } }
             };
             
             Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
                 groups.forEach(group => {
                     group.topics.forEach(topic => {
                         const topicKey = `${subject}-${topic}`;
-                        const stage = userProgress[topicKey] || 0;
+                        // Get progress object for the topic
+                        const progress = userProgress[topicKey] || {};
                         
-                        const sub = analysis.subjects[subject];
-                        if (sub) { 
-                            sub.totalTopics++;
-                            sub.completedMilestones += stage;
-                            sub.stages[stage]++;
-                            
-                            analysis.completedMilestones += stage;
-                        }
+                        let completedStagesForTopic = 0;
 
-                        // Calculate new 4-bar progress
-                        if (stage >= 1) analysis.progressByStage[1].count++;
-                        if (stage >= 2) analysis.progressByStage[2].count++;
-                        if (stage >= 3) analysis.progressByStage[3].count++;
-                        if (stage === 4) {
-                            analysis.progressByStage[4].count++;
+                        STAGE_KEYS.forEach(stage => {
+                            if (progress[stage.key]) {
+                                analysis.progressByStage[stage.key].count++;
+                                completedStagesForTopic++;
+                            }
+                        });
+
+                        analysis.subjects[subject].totalTopics++;
+                        analysis.subjects[subject].completedStages += completedStagesForTopic;
+
+                        if (progress.revision) {
                             analysis.completedRevisionTopics++;
                         }
                     });
                 });
             });
 
-            // Calculate percentages for the 4 bars
-            analysis.progressByStage[1].percentage = calculatePercentage(analysis.progressByStage[1].count, totalTopicsCount);
-            analysis.progressByStage[2].percentage = calculatePercentage(analysis.progressByStage[2].count, totalTopicsCount);
-            analysis.progressByStage[3].percentage = calculatePercentage(analysis.progressByStage[3].count, totalTopicsCount);
-            analysis.progressByStage[4].percentage = calculatePercentage(analysis.progressByStage[4].count, totalTopicsCount);
-
-
-            // Calculate percentages for the Subject Breakdown (Milestone based)
-            Object.keys(analysis.subjects).forEach(subject => {
-                const data = analysis.subjects[subject];
-                const totalSubMilestones = data.totalTopics * 4;
-                data.percentage = calculatePercentage(data.completedMilestones, totalSubMilestones);
+            // Calculate percentages for the 4 independent bars
+            STAGE_KEYS.forEach(stage => {
+                analysis.progressByStage[stage.key].percentage = calculatePercentage(analysis.progressByStage[stage.key].count, totalTopicsCount);
             });
-            
-            // 3. Update UI
+
+
+            // 3. Update UI (Header Stats)
             const topicsRevisedDisplay = document.getElementById('topics-revised');
             const totalTopicsDisplay = document.getElementById('total-topics');
             
@@ -398,26 +421,45 @@
                 totalTopicsDisplay.textContent = `${totalTopicsCount}`;
             }
 
-            // Render the 4 independent progress bars
+            // Render the 4 independent progress bars with click handlers and active state
             const progressContainer = document.getElementById('independent-progress-bars');
             if (progressContainer) {
                 let barsHtml = '';
-                [1, 2, 3, 4].forEach(stageId => {
-                    const stageData = analysis.progressByStage[stageId];
+                STAGE_KEYS.forEach(stageData => {
+                    
+                    // --- FIX: Access the calculated metrics from the analysis object ---
+                    const metrics = analysis.progressByStage[stageData.key]; 
+                    
+                    let hexColor;
+                    if (stageData.key === 'lecture') hexColor = '#f59e0b'; // Tailwind yellow-600
+                    else if (stageData.key === 'practice') hexColor = '#f97316'; // Tailwind orange-600
+                    else if (stageData.key === 'pyq') hexColor = '#9333ea'; // Tailwind purple-600
+                    else if (stageData.key === 'revision') hexColor = '#10b981'; // Tailwind green-600
+                    else hexColor = '#6b7280'; // gray-500 fallback
+
+                    const activeClass = currentFilterKey === stageData.key 
+                        ? 'ring-4 ring-indigo-400/50 scale-[1.01] shadow-2xl ring-offset-2' 
+                        : 'hover:shadow-xl hover:scale-[1.01] transition-all duration-200 cursor-pointer';
+                    
+                    // Indicator uses the dynamically calculated hex color
+                    const indicator = `<span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${hexColor}"></span>`;
+
                     barsHtml += `
-                        <div class="p-4 rounded-xl shadow-lg border border-gray-100 bg-white">
+                        <div onclick="setFilter('${stageData.key}')" class="p-4 rounded-xl shadow-lg border-t-4 bg-white ${activeClass}" style="border-top-color: ${hexColor}">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-lg font-bold text-gray-800 flex items-center">
-                                    <span class="text-xl mr-2">${stageData.icon}</span> ${stageData.label} Progress
+                                    ${indicator} ${stageData.label} Completed
                                 </h3>
-                                <span class="text-2xl font-extrabold text-indigo-600">${stageData.percentage}%</span>
+                                <!-- FIX APPLIED HERE: Use metrics.percentage and metrics.count -->
+                                <span class="text-2xl font-extrabold text-indigo-600">${metrics.percentage}%</span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
-                                <div class="h-3 rounded-full transition-all duration-500 ease-out ${stageData.color}" 
-                                     style="width: ${stageData.percentage}%">
+                                <div class="h-3 rounded-full transition-all duration-500 ease-out ${stageData.colorClass.replace('stage-', 'bg-')}" 
+                                     style="width: ${metrics.percentage}%">
                                 </div>
                             </div>
-                            <p class="text-sm text-gray-500 mt-2">${stageData.count} / ${totalTopicsCount} Topics Completed</p>
+                            <p class="text-sm text-gray-500 mt-2">${metrics.count} / ${totalTopicsCount} Topics Completed.</p>
+                            <p class="text-xs text-gray-400 mt-1">Click to filter topics where **${stageData.label}** is done.</p>
                         </div>
                     `;
                 });
@@ -425,8 +467,12 @@
             }
 
             // Update Subject Breakdown
-            ['Physics', 'Chemistry', 'Mathematics'].forEach(subject => {
+            Object.keys(analysis.subjects).forEach(subject => {
                 const data = analysis.subjects[subject];
+                // Max milestones for a subject (Total Topics * 4 independent stages)
+                const totalSubMilestones = data.totalTopics * STAGE_KEYS.length; 
+                data.percentage = calculatePercentage(data.completedStages, totalSubMilestones);
+                
                 if(document.getElementById(`${subject.toLowerCase()}-progress`)) {
                     document.getElementById(`${subject.toLowerCase()}-progress`).textContent = `${data.percentage}%`;
                     document.getElementById(`${subject.toLowerCase()}-total-topics`).textContent = `${data.totalTopics} Topics`;
@@ -438,80 +484,54 @@
         }
 
         function renderStageAnalysis(analysis) {
-            const stageAnalysisContainer = document.getElementById('stage-analysis-content');
-            if (!stageAnalysisContainer) return;
-            
-            let stageHtml = '';
-            const stageMapping = { 1: 'Lecture', 2: 'Practice', 3: 'PYQ', 4: 'Revision' };
-            
-            let overallBacklogHtml = '';
-            for (let i = 1; i <= 4; i++) {
-                const stageCount = analysis.subjects.Physics.stages[i] + analysis.subjects.Chemistry.stages[i] + analysis.subjects.Mathematics.stages[i];
-                if (stageCount > 0) {
-                    const stageLabel = stageMapping[i];
-                    let bgColor = 'bg-gray-200';
-                    if (i === 1) bgColor = 'bg-yellow-100 text-yellow-800';
-                    else if (i === 2) bgColor = 'bg-orange-100 text-orange-800';
-                    else if (i === 3) bgColor = 'bg-purple-100 text-purple-800';
-                    else if (i === 4) bgColor = 'bg-green-100 text-green-800';
-
-                    overallBacklogHtml += `<span class="inline-flex items-center px-3 py-1 rounded-full text-base font-bold ${bgColor} mr-3 mb-2">
-                                        ${stageCount} @ ${stageLabel}
-                                    </span>`;
-                }
-            }
-
-            Object.entries(analysis.subjects).forEach(([subject, data]) => {
-                let backlogHtml = '';
-                for (let i = 1; i <= 4; i++) {
-                    const stageCount = data.stages[i];
-                    if (stageCount > 0) {
-                        const stageLabel = stageMapping[i];
-                        let bgColor = 'bg-gray-200';
-                        if (i === 1) bgColor = 'bg-yellow-100 text-yellow-800';
-                        else if (i === 2) bgColor = 'bg-orange-100 text-orange-800';
-                        else if (i === 3) bgColor = 'bg-purple-100 text-purple-800';
-                        else if (i === 4) bgColor = 'bg-green-100 text-green-800';
-
-                        backlogHtml += `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgColor} mr-2 mb-1">
-                                            ${stageCount} @ ${stageLabel}
-                                        </span>`;
-                    }
-                }
-                
-                stageHtml += `
-                    <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-sky-500">
-                        <h4 class="text-xl font-bold text-sky-800 mb-3">${subject} (${data.totalTopics} Topics)</h4>
-                        <p class="text-sm font-semibold text-gray-700 mb-2">Current Milestones:</p>
-                        <div class="flex flex-wrap">
-                            ${backlogHtml || '<span class="text-gray-400 text-sm">No topics started or all revised.</span>'}
-                        </div>
+             const stageAnalysisContainer = document.getElementById('stage-analysis-content');
+             if (!stageAnalysisContainer) return;
+             
+             let overallHtml = STAGE_KEYS.map(stage => {
+                const count = analysis.progressByStage[stage.key].count;
+                const percentage = analysis.progressByStage[stage.key].percentage;
+                return `
+                    <div class="flex flex-col p-4 ${stage.colorClass.replace('stage-', 'bg-').replace('500', '100')} rounded-lg shadow-inner">
+                        <span class="text-2xl font-extrabold ${stage.colorClass.replace('stage-', 'text-')}" >${percentage}%</span>
+                        <span class="text-sm font-semibold text-gray-800">${count} Topics done with ${stage.label}</span>
                     </div>
                 `;
-            });
+             }).join('');
+
+
+            let subjectHtml = Object.entries(analysis.subjects).map(([subject, data]) => {
+                const totalStages = data.totalTopics * STAGE_KEYS.length;
+                const remainingStages = totalStages - data.completedStages;
+                
+                return `
+                    <div class="p-4 bg-white rounded-xl shadow-lg border-t-4 border-sky-500">
+                        <h4 class="text-xl font-bold text-sky-800 mb-3">${subject} (${data.totalTopics} Topics)</h4>
+                        <div class="text-2xl font-extrabold text-green-600">${data.completedStages}</div>
+                        <p class="text-sm font-medium text-gray-700">Stages Completed / ${totalStages}</p>
+                        <div class="text-xl font-extrabold text-red-600 mt-2">${remainingStages}</div>
+                        <p class="text-sm font-medium text-gray-700">Stages Remaining</p>
+                    </div>
+                `;
+            }).join('');
 
             stageAnalysisContainer.innerHTML = `
                 <div class="md:col-span-3">
-                    <h3 class="text-2xl font-extrabold text-indigo-700 mb-4 border-b pb-2">Overall Backlog Summary</h3>
-                    <div class="flex flex-wrap p-4 bg-indigo-50 rounded-xl shadow-inner mb-6">
-                        ${overallBacklogHtml || '<span class="text-gray-400 font-bold">No milestones started yet!</span>'}
+                    <h3 class="text-2xl font-extrabold text-indigo-700 mb-4 border-b pb-2">Overall Completion Status</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-indigo-50 rounded-xl shadow-inner mb-6">
+                        ${overallHtml}
                     </div>
                 </div>
-                ${stageHtml}
+                ${subjectHtml}
             `;
         }
 
-
-        function handleStageChange(event) {
-            const topicKey = event.target.name; 
-            const stage = parseInt(event.target.value, 10);
-            updateProgressInFirestore(topicKey, stage);
-        };
 
         function renderSyllabusUI() {
             const container = document.getElementById('syllabus-content');
             container.innerHTML = ''; 
 
+            let anyTopicVisible = false;
+            
             Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
                 const subjectCard = document.createElement('div');
                 subjectCard.className = 'bg-white p-4 sm:p-6 rounded-xl shadow-2xl border-t-8 border-sky-600 transition duration-500 hover:shadow-sky-300/50';
@@ -521,6 +541,8 @@
                 subjectTitle.textContent = subject;
                 subjectCard.appendChild(subjectTitle);
 
+                let subjectHasVisibleTopics = false;
+
                 groups.forEach(group => {
                     const groupSection = document.createElement('div');
                     groupSection.className = 'mb-6 p-4 bg-gray-50 rounded-xl shadow-inner';
@@ -529,74 +551,109 @@
                     groupTitle.className = 'text-lg font-bold text-sky-800 mb-3 border-b pb-1';
                     groupTitle.textContent = group.name;
                     groupSection.appendChild(groupTitle);
-
+                    
+                    let groupHasVisibleTopics = false;
                     const topicsList = document.createElement('div');
                     topicsList.className = 'space-y-3';
 
+
                     group.topics.forEach(topic => {
                         const topicKey = `${subject}-${topic}`;
-                        const currentStage = userProgress[topicKey] || 0;
+                        const progress = userProgress[topicKey] || {};
+                        
+                        // Filter Logic: Only show topic if no filter is active OR if the specific stage is completed (true)
+                        const isVisible = currentFilterKey === null || progress[currentFilterKey] === true;
 
-                        const itemDiv = document.createElement('div');
-                        itemDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-gray-100 shadow-sm';
-
-                        const label = document.createElement('span');
-                        label.className = `text-base font-medium text-gray-800 w-full sm:w-1/2 mr-4 ${currentStage === 4 ? 'line-through text-gray-500' : ''}`;
-                        label.textContent = topic;
-                        itemDiv.appendChild(label);
-
-                        // Stage Segmented Control
-                        const stageControl = document.createElement('div');
-                        stageControl.className = 'radio-stage flex flex-wrap justify-start sm:justify-end space-x-1 p-1 bg-gray-100 rounded-md mt-2 sm:mt-0 shadow-inner';
-
-                        // Add "Reset to None" (Stage 0) first
-                        const resetRadioId = `${topicKey}-0`;
-                        const isResetChecked = currentStage === 0;
-                        const resetInput = document.createElement('input');
-                        resetInput.type = 'radio';
-                        resetInput.id = resetRadioId;
-                        resetInput.name = topicKey;
-                        resetInput.value = 0;
-                        resetInput.checked = isResetChecked;
-                        resetInput.className = `stage-0`;
-                        resetInput.addEventListener('change', handleStageChange);
-                        const resetLabel = document.createElement('label');
-                        resetLabel.htmlFor = resetRadioId;
-                        resetLabel.textContent = 'Reset';
-                        stageControl.appendChild(resetInput);
-                        stageControl.appendChild(resetLabel);
-
-                        PROGRESS_STAGES.filter(s => s.id > 0).forEach(stage => {
-                            const radioId = `${topicKey}-${stage.id}`;
-                            const isChecked = currentStage === stage.id;
-
-                            const input = document.createElement('input');
-                            input.type = 'radio';
-                            input.id = radioId;
-                            input.name = topicKey; 
-                            input.value = stage.id;
-                            input.checked = isChecked;
-                            input.className = `stage-${stage.id}`; 
-                            input.addEventListener('change', handleStageChange);
-
-                            const labelEl = document.createElement('label');
-                            labelEl.htmlFor = radioId;
-                            labelEl.textContent = stage.label;
+                        if (isVisible) {
+                            groupHasVisibleTopics = true;
+                            subjectHasVisibleTopics = true;
+                            anyTopicVisible = true;
                             
-                            stageControl.appendChild(input);
-                            stageControl.appendChild(labelEl);
-                        });
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-gray-100 shadow-sm';
 
+                            const label = document.createElement('span');
+                            // If all 4 stages are complete, strike through the topic
+                            const isFullyComplete = STAGE_KEYS.every(s => progress[s.key]);
+                            label.className = `text-base font-medium text-gray-800 w-full sm:w-1/2 mr-4 ${isFullyComplete ? 'line-through text-gray-500' : ''}`;
+                            label.textContent = topic;
+                            itemDiv.appendChild(label);
 
-                        itemDiv.appendChild(stageControl);
-                        topicsList.appendChild(itemDiv);
+                            // Independent Stage Toggles - Now using styled checkboxes
+                            const stageToggles = document.createElement('div');
+                            stageToggles.className = 'flex flex-wrap justify-start sm:justify-end space-x-2 p-1 bg-gray-100 rounded-md mt-2 sm:mt-0 shadow-inner';
+
+                            STAGE_KEYS.forEach(stage => {
+                                const isChecked = progress[stage.key] || false;
+                                
+                                // Wrapper for the checkbox and label
+                                const stageWrapper = document.createElement('div');
+                                stageWrapper.className = 'relative';
+
+                                // 1. Hidden Checkbox Input
+                                const checkboxId = `${topicKey}-${stage.key}-check`;
+                                const checkbox = document.createElement('input');
+                                checkbox.type = 'checkbox';
+                                checkbox.id = checkboxId;
+                                checkbox.checked = isChecked;
+                                checkbox.className = 'sr-only peer'; // Visually hide the native checkbox
+                                // Use click handler to toggle completion
+                                checkbox.onclick = () => toggleStageCompletion(topicKey, stage.key);
+                                
+                                // 2. Styled Label (the visible button/pill)
+                                const label = document.createElement('label');
+                                label.htmlFor = checkboxId;
+                                
+                                // Base classes for the pill/badge
+                                const baseClasses = 'px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-all duration-200 flex items-center shadow-sm whitespace-nowrap';
+                                
+                                // MODIFIED: Changed peer-checked:text-white to peer-checked:text-gray-500 and added peer-checked:line-through
+                                const checkedClasses = `peer-checked:text-gray-500 peer-checked:line-through peer-checked:${stage.colorClass.replace('stage-', 'bg-')} peer-checked:shadow-md`;
+                                const uncheckedClasses = `peer-not-checked:bg-white peer-not-checked:text-gray-600 peer-not-checked:border peer-not-checked:border-gray-300 hover:bg-gray-100`;
+
+                                label.className = `${baseClasses} ${checkedClasses} ${uncheckedClasses}`;
+
+                                // Add content (Checkbox symbol and Label text)
+                                // We need to check the local state here since this is part of the re-render logic
+                                const currentIsChecked = userProgress[topicKey]?.[stage.key] || false;
+                                label.innerHTML = `
+                                    <span class="text-sm mr-1">${currentIsChecked ? '✓' : '☐'}</span> 
+                                    <span>${stage.label}</span>
+                                `;
+
+                                stageWrapper.appendChild(checkbox);
+                                stageWrapper.appendChild(label);
+                                stageToggles.appendChild(stageWrapper);
+                            });
+
+                            itemDiv.appendChild(stageToggles);
+                            topicsList.appendChild(itemDiv);
+                        }
                     });
 
-                    groupSection.appendChild(topicsList);
-                    subjectCard.appendChild(groupSection);
+                    if (groupHasVisibleTopics) {
+                        groupSection.appendChild(topicsList);
+                        subjectCard.appendChild(groupSection);
+                    }
                 });
-                container.appendChild(subjectCard);
+                
+                if (subjectHasVisibleTopics) {
+                    container.appendChild(subjectCard);
+                }
             });
+            
+            // Handle case where filter is active but no topics match
+            if (!anyTopicVisible && currentFilterKey !== null) {
+                container.innerHTML = `<div class="md:col-span-3 text-center p-12 bg-yellow-50 rounded-xl shadow-inner border-y-4 border-yellow-300">
+                    <h3 class="text-2xl font-bold text-yellow-800 mb-2">No Topics Found</h3>
+                    <p class="text-lg text-yellow-700">There are no topics currently marked as **${STAGE_KEYS.find(s => s.key === currentFilterKey).label}** complete.</p>
+                </div>`;
+            } else if (!anyTopicVisible && currentFilterKey === null) {
+                 container.innerHTML = `<div class="md:col-span-3 text-center p-12 bg-yellow-50 rounded-xl shadow-inner border-y-4 border-yellow-300">
+                    <h3 class="text-2xl font-bold text-yellow-800 mb-2">Syllabus Missing</h3>
+                    <p class="text-lg text-yellow-700">The syllabus definition is empty. Please check the 'JEE_SYLLABUS' object in the code.</p>
+                </div>`;
+            }
         };
 
     </script>
@@ -609,8 +666,8 @@
         <!-- Header -->
         <header class="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border-b-4 border-indigo-600 flex justify-between items-center">
             <div>
-                <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE 4-Stage Tracker</h1>
-                <p class="text-base sm:text-lg text-gray-600">Track milestones: **Lecture, Practice, PYQ, Revision**.</p>
+                <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE Independent Stage Tracker</h1>
+                <p class="text-base sm:text-lg text-gray-600">Mark **Lecture, Practice, PYQ, and Revision** independently for each topic.</p>
             </div>
             <div id="session-display" class="flex items-center p-2 bg-indigo-50 rounded-lg shadow-inner">
                 <span class="text-3xl mr-2">...</span>
@@ -623,7 +680,6 @@
 
         <!-- Status Bar -->
         <div class="flex flex-col sm:flex-row justify-between items-center mb-8 p-3 bg-indigo-50 rounded-lg shadow-inner text-sm text-indigo-700">
-            <!-- Status message updates from JS to indicate readiness -->
             <span id="auth-status" class="font-medium">Initializing connection for automatic saving...</span>
         </div>
 
@@ -634,21 +690,21 @@
             <div id="progress-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-indigo-500">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <div class="flex flex-col p-3 bg-blue-50 rounded-xl">
-                        <span class="text-lg font-bold text-gray-800">Total Topics:</span>
+                        <span class="text-lg font-bold text-gray-800">Total Topics in Syllabus:</span>
                         <span id="total-topics" class="text-4xl font-extrabold text-blue-600">--</span>
                     </div>
                     <div class="flex flex-col p-3 bg-green-50 rounded-xl">
-                        <span class="text-lg font-bold text-gray-800">Topics Fully Revised (Stage 4):</span>
+                        <span class="text-lg font-bold text-gray-800">Topics Fully Revised (All 4 stages):</span>
                         <span id="topics-revised" class="text-4xl font-extrabold text-green-600">--</span>
                     </div>
                     <div class="flex flex-col p-3 bg-indigo-50 rounded-xl">
-                        <span class="text-lg font-bold text-gray-800">Overall Progress Tracker:</span>
-                        <span class="text-sm text-indigo-400 mt-1">Total possible milestones: 344 <span id="total-topics" class="font-bold">--</span></span>
-                        <span class="text-2xl font-extrabold text-indigo-600 mt-1">Check Your analysis below 👇</span>
+                        <span class="text-lg font-bold text-gray-800">Action: Click a bar below to filter syllabus!</span>
+                        <span class="text-md text-indigo-600 mt-1">Filter to see only topics where that stage is **Done**.</span>
+                        <span class="text-sm text-indigo-400 mt-1">Click the selected bar again to reset the view.</span>
                     </div>
                 </div>
                 
-                <h3 class="text-2xl font-black text-indigo-700 mb-6 border-b pb-2">Independent Progress (Topics Completed)</h3>
+                <h3 class="text-2xl font-black text-indigo-700 mb-6 border-b pb-2">Independent Stage Completion Rate</h3>
 
                 <!-- Independent Progress Bars -->
                 <div id="independent-progress-bars" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -656,8 +712,8 @@
                     <div class="p-4 rounded-xl shadow-lg border border-gray-100 bg-white text-center text-gray-500">Loading analysis...</div>
                 </div>
 
-                <h3 class="text-xl font-bold text-gray-800 mt-10 mb-4 border-b pb-1">Subject Breakdown (Milestone % based)</h3>
-                <!-- Subject-wise Percentage Breakdown (Kept for detailed subject analysis) -->
+                <h3 class="text-xl font-bold text-gray-800 mt-10 mb-4 border-b pb-1">Subject Breakdown (Stages Completed Percentage)</h3>
+                <!-- Subject-wise Percentage Breakdown -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <!-- Physics -->
                     <div class="p-3 bg-sky-50 rounded-lg shadow-md">
@@ -697,10 +753,15 @@
                 </div>
             </div>
 
-            <!-- Stage Analysis Card (Backlog Summary) -->
+            <!-- Filter Status Display -->
+            <div id="filter-status" class="mb-8 hidden">
+                <!-- Filter message and reset button will be rendered here -->
+            </div>
+
+            <!-- Stage Analysis Card (Completion Summary) -->
             <div id="analysis-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-purple-500">
-                <h2 class="text-2xl font-black text-purple-700 mb-4">Topic Stage Analysis (Backlogs)</h2>
-                <p class="text-gray-600 mb-6">This breakdown shows the number of topics currently stuck at a specific milestone.</p>
+                <h2 class="text-2xl font-black text-purple-700 mb-4">Detailed Completion Breakdown</h2>
+                <p class="text-gray-600 mb-6">Tracking how many individual milestones (4 per topic) you have completed.</p>
                 
                 <div id="stage-analysis-content" class="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div class="md:col-span-3 text-center p-8 text-gray-400">Loading analysis...</div>
@@ -717,7 +778,7 @@
 
         <!-- Footer -->
         <footer class="mt-12 text-center text-sm text-gray-500 border-t pt-4">
-            <p>Stages: 1=Lecture, 2=Practice, 3=PYQ, 4=Revision. Progress is saved automatically using your unique session ID.</p>
+            <p>Progress is saved automatically using your unique session ID.</p>
         </footer>
     </div>
 </body>
