@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JEE 4-Stage Syllabus Progress Tracker</title>
+    <title>JEE 4-Stage Syllabus Progress Tracker (Auto-Save)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Inter font -->
@@ -20,17 +20,14 @@
             cursor: pointer; padding: 4px 6px; font-size: 11px; font-weight: 500; text-align: center;
             border-radius: 4px; transition: all 0.2s; color: #6b7280; white-space: nowrap;
         }
-        .radio-stage input[type="radio"]:checked + label {
-            color: white; background-color: #3b82f6; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        .radio-stage input[type="radio"].stage-0:checked + label { background-color: #94a3b8; }
+        /* Updated color styles for each stage */
+        .radio-stage input[type="radio"]:checked + label { color: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+        .radio-stage input[type="radio"].stage-0:checked + label { background-color: #94a3b8; } /* Reset - Gray */
+        .radio-stage input[type="radio"].stage-1:checked + label { background-color: #f59e0b; } /* Lecture - Yellow */
+        .radio-stage input[type="radio"].stage-2:checked + label { background-color: #ea580c; } /* Practice - Orange */
+        .radio-stage input[type="radio"].stage-3:checked + label { background-color: #9333ea; } /* PYQ - Purple */
+        .radio-stage input[type="radio"].stage-4:checked + label { background-color: #10b981; } /* Revision - Green */
         
-        /* Modal Backdrop */
-        .modal-backdrop {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.5); z-index: 50; display: none;
-        }
-
         /* Notification Toast Container */
         #notification-container {
             position: fixed; top: 20px; right: 20px; z-index: 60;
@@ -46,27 +43,31 @@
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         setLogLevel('Debug');
 
-        // --- GLOBAL FIREBASE/APP VARIABLES (MANDATORY USE) ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = {
-            apiKey: "AIzaSyB9wE0qIEvaueXJzLyIQQmvhyGJC6k-j94",
-            authDomain: "jee-tracker-ead00.firebaseapp.com",
-            projectId: "jee-tracker-ead00",
-            storageBucket: "jee-tracker-ead00.firebasestorage.app",
-            messagingSenderId: "818054839055",
-            appId: "1:818054839055:web:139434c214d335247e5c7a"
-            };
-        
+        // --- HARDCODED FIREBASE CONFIGURATION (Using the configuration you provided) ---
+        const HARDCODED_FIREBASE_CONFIG = { 
+             apiKey: "AIzaSyB9wE0qIEvaueXJzLyIQQmvhyGJC6k-j94", 
+             authDomain: "jee-tracker-ead00.firebaseapp.com", 
+             projectId: "jee-tracker-ead00", 
+             storageBucket: "jee-tracker-ead00.firebasestorage.app", 
+             messagingSenderId: "818054839055", 
+             appId: "1:818054839055:web:139434c214d335247e5c7a" 
+        };
+
+        // --- GLOBAL FIREBASE/APP VARIABLES ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : HARDCODED_FIREBASE_CONFIG.projectId;
+        const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
         let app, db, auth, userId = null;
-        let userProgress = {}; // Stores { 'Physics-Kinematics': 3, 'Math-Circles': 1, ... }
+        let userProgress = {}; 
         let totalTopicsCount = 0;
-        let userProfile = { name: 'User', avatar: '👋' }; // Local profile state
+        let userProfile = { name: 'Anonymous User', avatar: '🚀' }; 
 
         const AVATAR_EMOJIS = ['🐶', '🐱', '🦊', '🐻', '🐼', '🐨', '🐅', '🐘', '🐒', '🦖', '🦋', '🦉', '🐢', '🍎', '🍓', '🍍', '🍉', '🥝', '🥭', '🍇'];
         
@@ -79,19 +80,25 @@
             { id: 4, label: 'Revision', key: 'revision', color: 'bg-green-500' }
         ];
 
-        // --- CORE SYLLABUS STRUCTURE (Kept concise for brevity) ---
+        // --- CORE SYLLABUS STRUCTURE (using the simplified list from the existing file) ---
         const JEE_SYLLABUS = {
             Physics: [
-                { name: "Mechanics", topics: ["Units, Dimensions & Errors", "Kinematics", "Newton's Laws of Motion (NLM)", "Rotational Motion"] },
-                { name: "Thermodynamics", topics: ["Thermal Properties", "Thermodynamics", "Waves"] },
+                { name: "Mechanics", topics: ["Units, Dimensions & Errors", "Motion in 1D","Motion in 2D", "Newton's Laws of Motion (NLM)","Work Power Energy","Centre of mass", "Rotational Motion","Mechanical Properties of Solid","Mechanical Properties of Fluid"] },
+                { name: "Thermodynamics", topics: ["Thermal Properties", "Thermodynamics & KTG"] },
+                { name: "Waves", topics: ["SHM", "Waves",] },
+                { name: "Electro-Magnetism", topics: ["Electrostatics and electrostatic potential", "Current electricity","Capacitor","EMI","Alternating Current"] },
+                { name: "Optics and Modern Physics", topics: ["Ray Optics", "Wave Optics","Modern Physics","Semiconductor"] }
             ],
             Chemistry: [
-                { name: "Physical Chemistry", topics: ["Mole Concept", "Atomic Structure", "Gaseous State"] },
-                { name: "Organic Chemistry", topics: ["General Organic Chemistry (GOC)", "Hydrocarbons", "Alcohols, Phenols, Ethers"] }
+                { name: "Physical Chemistry", topics: ["Mole Concept", "Atomic Structure", "Gaseous State","Thermodynamics","Chemical Equilibrium","Ionic Equilibrium","Redox Reaction","Solutions","Electrochemistry","Chemical Kinetics"] },
+                { name: "Organic Chemistry", topics: ["Nomenclature","General Organic Chemistry (GOC)", "Hydrocarbons", "Alcohols, Phenols, Ethers","Aldehyde,Ketone , Carboxylic Acid","Amines","Biomolecules","Chemistry in everyday life"] },
+                { name: "Inorganic Chemistry", topics: ["Periodic Properties of Elements", "Chemical Bonding", "D and F Block","P block","S block", "Hydrogen"] }
             ],
             Mathematics: [
-                { name: "Algebra", topics: ["Sets & Relations", "Complex Numbers", "Quadratic Equations"] },
-                { name: "Calculus", topics: ["Limits & Continuity", "AOD", "Integrals"] }
+                { name: "Algebra", topics: ["Sets", "Complex Numbers", "Quadratic Equations","Matrices","Determinants"] },
+                { name: "Calculus", topics: ["Relation and Functions","Limits & Continuity", "AOD", "Indefinite Integration", "Definite Integration","Differential Equation"] },
+                { name: "Co-Ordinate Geometry", topics: ["Straight Lines","Circles","Parabola","Ellipse","Hyperbola"] },
+                { name: "Vector 3D", topics:["Vector","3 Dimentional Geometry"]}
             ]
         };
 
@@ -102,193 +109,134 @@
             });
         });
         
+        // --- FIREBASE INITIALIZATION & AUTH (AUTO-SIGN-IN) ---
+
+        window.onload = async () => {
+            const authStatusElement = document.getElementById('auth-status');
+            
+            try {
+                if (firebaseConfig) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+                    
+                    // 1. Attempt Custom Token Sign-in (preferred), with anonymous fallback if token fails
+                    if (initialAuthToken) {
+                        try {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } catch (tokenError) {
+                            console.warn("Custom token failed:", tokenError.message, "Attempting anonymous sign-in as fallback.");
+                            // Fallback to anonymous sign-in if custom token is mismatched or invalid
+                            await signInAnonymously(auth);
+                            authStatusElement.textContent = 'Warning: Custom token failed. Signed in anonymously for persistence.';
+                        }
+                    } else {
+                        // If no token, use anonymous sign-in directly
+                        await signInAnonymously(auth);
+                    }
+
+                    // 2. Wait for auth state to be established
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            
+                            // Initialize local profile state if it wasn't already loaded from Firestore
+                            if (userProfile.name === 'Anonymous User') {
+                                userProfile.name = `User ${user.uid.substring(0, 4)}`;
+                                userProfile.avatar = generateRandomAvatarEmoji();
+                            }
+                            
+                            // Only update status if it's the default loading message or the warning message
+                            if (authStatusElement.textContent.includes('Initializing') || authStatusElement.textContent.includes('Warning: Custom token failed')) {
+                                authStatusElement.textContent = `Progress automatically saved. Your ID: ${userId.substring(0, 8)}...`;
+                            }
+
+                            document.getElementById('tracker-ui').classList.remove('hidden');
+                            updateHeaderUI();
+                            loadProgressData(); // Start listening for data
+                        } else {
+                            if (!authStatusElement.textContent.includes('Error:')) {
+                                authStatusElement.textContent = 'Error: Could not establish an anonymous tracking session.';
+                            }
+                        }
+                    });
+
+                } else {
+                    console.error("Firebase config missing. Cannot save data.");
+                    authStatusElement.textContent = 'ERROR: Firebase configuration is missing. Data saving is disabled.';
+                }
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                // This catch handles general initialization errors outside of the sign-in logic
+                authStatusElement.textContent = `Error during setup: ${error.message}`;
+            }
+        };
+
+        function updateHeaderUI() {
+            // Update the header text to show the current anonymous session ID
+            const headerElement = document.getElementById('session-display');
+            if (userId) {
+                headerElement.innerHTML = `
+                    <span id="profile-avatar" class="text-3xl mr-2">${userProfile.avatar}</span>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-gray-800">${userProfile.name}</span>
+                        <p class="text-sm text-gray-500">Session ID: ${userId.substring(0, 8)}...</p>
+                    </div>
+                `;
+            }
+        }
+
         // --- UTILITY FUNCTIONS ---
         const generateRandomAvatarEmoji = () => {
             const randomIndex = Math.floor(Math.random() * AVATAR_EMOJIS.length);
             return AVATAR_EMOJIS[randomIndex];
         };
 
-        // --- FIREBASE INITIALIZATION & AUTH ---
-
-        window.onload = async () => {
-            const authStatusElement = document.getElementById('auth-status');
-            
-            try {
-                if (Object.keys(firebaseConfig).length > 0) {
-                    app = initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    authStatusElement.textContent = 'Awaiting Sign-in...';
-
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            userId = user.uid;
-                            // Check if display name is set on Firebase Auth, use it as fallback
-                            userProfile.name = user.displayName || 'New User';
-                            userProfile.email = user.email || 'N/A';
-                            
-                            handleLoginSuccess(user);
-                            loadProgressData(); // Listens for profile and progress updates
-                        } else {
-                            userId = null;
-                            handleLogout();
-                        }
-                    });
-
-                } else {
-                    console.error("Firebase config missing. Running in mock mode.");
-                    authStatusElement.textContent = 'Running in Local/Mock Mode.';
-                    handleLogout(); 
-                }
-
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                authStatusElement.textContent = `Error: ${error.message}`;
-            }
-        };
-
-        function updateHeaderUI() {
-            const avatarElement = document.getElementById('profile-avatar');
-            const nameElement = document.getElementById('profile-name-display');
-
-            avatarElement.textContent = userProfile.avatar || '❓';
-            nameElement.textContent = userProfile.name || 'User';
-        }
-
-        function handleLoginSuccess(user) {
-            document.getElementById('tracker-ui').classList.remove('hidden');
-            document.getElementById('auth-form-container').classList.add('hidden');
-            document.getElementById('profile-button').classList.remove('hidden');
-            updateHeaderUI();
-        }
-
-        function handleLogout() {
-            document.getElementById('auth-status').textContent = 'Please Sign In or Create an Account.';
-            document.getElementById('tracker-ui').classList.add('hidden');
-            document.getElementById('auth-form-container').classList.remove('hidden');
-            document.getElementById('profile-button').classList.add('hidden');
-            document.getElementById('syllabus-content').innerHTML = '<div class="md:col-span-3 text-center p-12 text-gray-500">Sign in to load your progress tracker.</div>';
-            userProgress = {};
-            userProfile = { name: 'User', avatar: '👋' };
-            updateOverallProgress(); 
-            updateHeaderUI();
-        }
-
-        async function authenticateUser(isSignUp) {
-            const emailInput = document.getElementById('email').value.trim();
-            const passwordInput = document.getElementById('password').value;
-            const displayNameInput = document.getElementById('display-name').value.trim();
-            const errorDisplay = document.getElementById('auth-error');
-            errorDisplay.textContent = '';
-
-            if (!emailInput || !passwordInput) {
-                errorDisplay.textContent = 'Please enter both email and password.';
-                return;
-            }
-            if (isSignUp && !displayNameInput) {
-                errorDisplay.textContent = 'Please choose a display name for your profile.';
-                return;
-            }
-
-            try {
-                if (isSignUp) {
-                    const userCredential = await createUserWithEmailAndPassword(auth, emailInput, passwordInput);
-                    const user = userCredential.user;
-                    
-                    // 1. Update Firebase Auth Profile (for immediate name display)
-                    await updateProfile(user, { displayName: displayNameInput });
-
-                    // 2. Initialize Firestore Profile (for avatar and persistence)
-                    const randomAvatar = generateRandomAvatarEmoji();
-                    await initializeUserProfile(user.uid, displayNameInput, randomAvatar);
-
-                    showNotification('Account Created!', `Welcome, ${displayNameInput}! Your avatar is ${randomAvatar}.`, 'bg-indigo-600');
-
-                } else {
-                    await signInWithEmailAndPassword(auth, emailInput, passwordInput);
-                }
-            } catch (error) {
-                errorDisplay.textContent = `Authentication failed: ${error.message}`;
-                console.error("Auth Error:", error);
-            }
-        }
-
-        async function signInWithGoogle() {
-            const errorDisplay = document.getElementById('auth-error');
-            errorDisplay.textContent = '';
-            try {
-                const provider = new GoogleAuthProvider();
-                const result = await signInWithPopup(auth, provider);
-                const user = result.user;
-
-                // Check if user is newly created or existing
-                if (result.additionalUserInfo.isNewUser) {
-                    const randomAvatar = generateRandomAvatarEmoji();
-                    const name = user.displayName || 'Google User';
-                    await initializeUserProfile(user.uid, name, randomAvatar);
-                    showNotification('Account Created!', `Welcome, ${name}! Your avatar is ${randomAvatar}.`, 'bg-indigo-600');
-                }
-
-            } catch (error) {
-                errorDisplay.textContent = `Google Sign-In failed: ${error.message}`;
-                console.error("Google Auth Error:", error);
-            }
-        }
-
-        async function signOutUser() {
-            try {
-                await signOut(auth);
-                closeModal('profile-modal');
-                showNotification('Signed Out', 'You have successfully signed out.', 'bg-yellow-500');
-            } catch (error) {
-                console.error("Sign Out Error:", error);
-            }
-        }
-
         // --- FIREBASE DATA FUNCTIONS ---
 
         const getProgressDocRef = () => {
             if (!db || !userId) return null;
-            // Private data storage
+            // Private data storage path: /artifacts/{appId}/users/{userId}/jee_4stage_tracker
             const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_tracker`; 
             return doc(db, userPath, "progress");
         };
 
         const initializeUserProfile = async (uid, name, avatar) => {
             const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_tracker`, "progress");
-            await setDoc(docRef, { 
-                profile: { name, avatar, createdAt: new Date().toISOString() },
-                topics: {} // Initialize empty topics object
-            }, { merge: true });
+            try {
+                // Use merge: true to avoid deleting existing fields if they exist (though 'topics' is initialized empty here)
+                await setDoc(docRef, { 
+                    profile: { name, avatar, createdAt: new Date().toISOString() },
+                    topics: {} // Initialize empty topics object
+                }, { merge: true });
+            } catch (error) {
+                 console.error("Error initializing user profile:", error);
+            }
         };
 
         const loadProgressData = () => {
             const progressDocRef = getProgressDocRef();
             if (!progressDocRef) return;
 
-            // This single listener handles both profile and progress updates
             onSnapshot(progressDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     
-                    // 1. Update Profile State
                     if (data.profile) {
-                        userProfile.name = data.profile.name || auth.currentUser.displayName || 'User';
-                        userProfile.avatar = data.profile.avatar || '❓';
-                        userProfile.email = auth.currentUser.email; // Ensure email is current
-                        updateHeaderUI();
+                         // Only update profile if data exists, but avoid overwriting a saved custom name if one was added later
+                         if (data.profile.name && data.profile.name.startsWith('User')) {
+                             userProfile.name = data.profile.name;
+                             userProfile.avatar = data.profile.avatar;
+                             updateHeaderUI();
+                        }
                     }
 
-                    // 2. Update Progress State
                     userProgress = data.topics || {};
 
                 } else {
-                    // This happens for a brand new user who just signed up via custom email/password 
-                    // and hasn't had their profile initialized or if data was deleted.
                     console.log("No progress document found. Initializing profile with default values.");
-                    const name = auth.currentUser?.displayName || 'New User';
-                    const avatar = generateRandomAvatarEmoji();
-                    initializeUserProfile(userId, name, avatar);
+                    initializeUserProfile(userId, userProfile.name, userProfile.avatar);
                 }
                 
                 renderSyllabusUI();
@@ -302,6 +250,7 @@
         const updateProgressInFirestore = async (topicKey, stage) => {
             if (!db || !userId) {
                 console.error("Cannot save data: User not authenticated.");
+                showNotification('Save Error', 'Cannot save data. Session not established.', 'bg-red-500');
                 return;
             }
 
@@ -311,48 +260,25 @@
             // Optimistically update local state
             userProgress[topicKey] = stage;
 
-            // Check for completion achievement
             if (stage === 4 && previousStage < 4) {
                 showNotification('Topic Complete!', `Congrats! You finished the **${topicKey.split('-')[1]}** revision milestone.`, 'bg-green-600');
             }
             
-            // Check for 100% syllabus completion
             const totalRevised = Object.values(userProgress).filter(s => s === 4).length;
             if (totalRevised === totalTopicsCount) {
                 showNotification('Syllabus Mastered!', '🥳 You completed all JEE topics! You are ready for the exam!', 'bg-indigo-600', 8000);
             }
 
             try {
+                // Update the single field using updateDoc for efficiency
                 await updateDoc(docRef, { [`topics.${topicKey}`]: stage });
             } catch (error) {
                 console.error("Error updating document:", error);
+                showNotification('Database Write Failed', 'There was an issue saving your progress. Check console for details.', 'bg-red-700');
             }
         };
 
-        async function updateUserName(newName) {
-            if (!auth.currentUser) return;
-            
-            try {
-                // 1. Update Firebase Auth profile
-                await updateProfile(auth.currentUser, { displayName: newName });
-                
-                // 2. Update Firestore document
-                const docRef = getProgressDocRef();
-                await updateDoc(docRef, { 
-                    'profile.name': newName 
-                });
-
-                // Success notification and UI update handled by onSnapshot listener
-                showNotification('Profile Updated', `Your name is now **${newName}**!`, 'bg-blue-500');
-                closeModal('profile-modal');
-
-            } catch (error) {
-                console.error("Error updating profile:", error);
-                document.getElementById('profile-error').textContent = `Failed to update name: ${error.message}`;
-            }
-        }
-
-        // --- UI RENDERING & LOGIC ---
+        // --- UI RENDERING & LOGIC (Updated to reflect new CSS colors) ---
 
         function showNotification(title, message, bgColor, duration = 4000) {
             const container = document.getElementById('notification-container');
@@ -366,13 +292,16 @@
             container.appendChild(toast);
 
             setTimeout(() => {
-                toast.classList.add('opacity-0');
-                setTimeout(() => toast.remove(), 500); // Remove after fade out animation
-            }, duration);
+                // Use setTimeout to ensure the fadeOut animation runs after the initial duration
+                setTimeout(() => {
+                    toast.classList.add('opacity-0');
+                    // Remove element after fadeOut transition completes (0.5s)
+                    setTimeout(() => toast.remove(), 500); 
+                }, duration - 500); 
+            }, 0); // Start showing immediately
         }
 
         function updateOverallProgress() {
-            // ... (Progress calculation logic remains the same)
             let analysis = {
                 overall: { totalTopics: totalTopicsCount, totalStages: totalTopicsCount * 4, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } },
                 subjects: { Physics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Chemistry: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Mathematics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } } }
@@ -385,13 +314,16 @@
                         const stage = userProgress[topicKey] || 0;
                         
                         const sub = analysis.subjects[subject];
-                        sub.totalTopics++;
-                        sub.totalStages += 4;
-                        sub.completedStages += stage;
-                        sub.stages[stage]++;
+                        // Null check added for safety, though structure assumes subjects exist
+                        if (sub) { 
+                            sub.totalTopics++;
+                            sub.totalStages += 4;
+                            sub.completedStages += stage;
+                            sub.stages[stage]++;
 
-                        analysis.overall.completedStages += stage;
-                        analysis.overall.stages[stage]++;
+                            analysis.overall.completedStages += stage;
+                            analysis.overall.stages[stage]++;
+                        }
                     });
                 });
             });
@@ -448,7 +380,6 @@
             let stageHtml = '';
             const stageMapping = { 1: 'Lecture', 2: 'Practice', 3: 'PYQ', 4: 'Revision' };
             
-            // Overall Backlog Summary
             let overallBacklogHtml = '';
             for (let i = 1; i <= 4; i++) {
                 const stageCount = analysis.overall.stages[i];
@@ -466,7 +397,6 @@
                 }
             }
 
-            // Subject-wise cards
             Object.entries(analysis.subjects).forEach(([subject, data]) => {
                 let backlogHtml = '';
                 for (let i = 1; i <= 4; i++) {
@@ -582,7 +512,7 @@
                             input.name = topicKey; 
                             input.value = stage.id;
                             input.checked = isChecked;
-                            input.className = `stage-${stage.id}`;
+                            input.className = `stage-${stage.id}`; // This links to the new CSS classes
                             input.addEventListener('change', handleStageChange);
 
                             const labelEl = document.createElement('label');
@@ -605,33 +535,6 @@
             });
         };
 
-        // Modal Functions
-        window.openModal = (modalId) => {
-            document.getElementById(modalId).style.display = 'flex';
-            document.getElementById(`${modalId}-backdrop`).style.display = 'block';
-            if (modalId === 'profile-modal') {
-                document.getElementById('profile-modal-avatar').textContent = userProfile.avatar;
-                document.getElementById('profile-modal-name').textContent = userProfile.name;
-                document.getElementById('profile-modal-email').textContent = userProfile.email || 'N/A';
-                document.getElementById('profile-modal-uid').textContent = auth.currentUser ? auth.currentUser.uid : 'N/A';
-                document.getElementById('edit-name-input').value = userProfile.name;
-                document.getElementById('profile-error').textContent = '';
-            }
-        }
-
-        window.closeModal = (modalId) => {
-            document.getElementById(modalId).style.display = 'none';
-            document.getElementById(`${modalId}-backdrop`).style.display = 'none';
-        }
-        
-        window.saveProfileName = () => {
-            const newName = document.getElementById('edit-name-input').value.trim();
-            if (newName && newName !== userProfile.name) {
-                updateUserName(newName);
-            } else {
-                document.getElementById('profile-error').textContent = 'Please enter a valid, new display name.';
-            }
-        }
     </script>
 </head>
 <body class="min-h-screen">
@@ -645,53 +548,22 @@
                 <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE 4-Stage Tracker</h1>
                 <p class="text-base sm:text-lg text-gray-600">Track milestones: **Lecture, Practice, PYQ, Revision**.</p>
             </div>
-            <button id="profile-button" onclick="openModal('profile-modal')" class="hidden bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-full shadow-md transition duration-200 flex items-center">
-                <span id="profile-avatar" class="text-xl mr-2 leading-none">👋</span>
-                <span id="profile-name-display">Profile</span>
-            </button>
+            <div id="session-display" class="flex items-center p-2 bg-indigo-50 rounded-lg shadow-inner">
+                <span class="text-3xl mr-2">...</span>
+                <div class="text-left">
+                    <span class="text-xl font-bold text-gray-800">Loading Session...</span>
+                    <p class="text-sm text-gray-500">Connecting to database...</p>
+                </div>
+            </div>
         </header>
 
-        <!-- Authentication and User Info Bar -->
+        <!-- Status Bar -->
         <div class="flex flex-col sm:flex-row justify-between items-center mb-8 p-3 bg-indigo-50 rounded-lg shadow-inner text-sm text-indigo-700">
-            <span id="auth-status" class="font-medium">Initializing authentication...</span>
+            <!-- Status message updates from JS to indicate readiness -->
+            <span id="auth-status" class="font-medium">Initializing connection for automatic saving...</span>
         </div>
 
-        <!-- AUTHENTICATION FORM (Shown when logged out) -->
-        <div id="auth-form-container" class="hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-2xl border-t-4 border-red-500 mb-10">
-            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Sign In or Sign Up</h2>
-            <div id="auth-error" class="text-red-500 text-sm mb-4 font-medium"></div>
-
-            <input type="text" id="display-name" placeholder="Choose a Display Name (for Sign Up)" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-            <input type="email" id="email" placeholder="Email" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-            <input type="password" id="password" placeholder="Password (min 6 characters)" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
-            
-            <div class="flex space-x-4 mb-6">
-                <button onclick="authenticateUser(false)" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition shadow-md">
-                    Sign In
-                </button>
-                <button onclick="authenticateUser(true)" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition shadow-md">
-                    Sign Up (Gets Random Avatar)
-                </button>
-            </div>
-
-            <div class="relative flex items-center justify-center my-6">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-gray-300"></div>
-                </div>
-                <div class="relative bg-white px-3 text-gray-500">
-                    OR
-                </div>
-            </div>
-
-            <button onclick="signInWithGoogle()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition shadow-md flex items-center justify-center">
-                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 48 48">
-                    <path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 12.9 2 4 10.9 4 22c0 11.1 8.9 20 20 20s20-8.9 20-20v-2z"/>
-                </svg>
-                Sign In with Google
-            </button>
-        </div>
-
-        <!-- MAIN TRACKER UI (Hidden when logged out) -->
+        <!-- MAIN TRACKER UI (Visible immediately, but data loads only after session established) -->
         <div id="tracker-ui" class="hidden">
             
             <!-- Overall Progress Card -->
@@ -777,54 +649,8 @@
 
         <!-- Footer -->
         <footer class="mt-12 text-center text-sm text-gray-500 border-t pt-4">
-            <p>Stages: 1=Lecture, 2=Practice, 3=PYQ, 4=Revision. Progress is saved automatically via Firestore.</p>
+            <p>Stages: 1=Lecture, 2=Practice, 3=PYQ, 4=Revision. Progress is saved automatically using your unique session ID.</p>
         </footer>
-    </div>
-    
-    <!-- Profile Modal -->
-    <div id="profile-modal-backdrop" class="modal-backdrop" onclick="closeModal('profile-modal')"></div>
-    <div id="profile-modal" class="modal-backdrop flex items-center justify-center">
-        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md m-4" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center border-b pb-3 mb-6">
-                <h3 class="text-2xl font-bold text-indigo-700">User Profile</h3>
-                <button onclick="closeModal('profile-modal')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            
-            <!-- Avatar and Name Display -->
-            <div class="flex items-center mb-6 border-b pb-4">
-                <div id="profile-modal-avatar" class="text-6xl p-3 bg-indigo-100 rounded-full leading-none shadow-inner">
-                    ❓
-                </div>
-                <div class="ml-4">
-                    <p id="profile-modal-name" class="text-2xl font-bold text-gray-800">Loading...</p>
-                    <p class="text-sm text-gray-500">Your Study Companion</p>
-                </div>
-            </div>
-            
-            <!-- Profile Details -->
-            <div class="space-y-4 mb-8">
-                <p class="text-lg">
-                    <span class="font-semibold text-gray-700 block">Email:</span>
-                    <span id="profile-modal-email" class="font-mono text-indigo-500">Loading...</span>
-                </p>
-                
-                <!-- Name Edit Section -->
-                <div class="pt-4">
-                    <label for="edit-name-input" class="font-semibold text-gray-700 block mb-2">Change Display Name:</label>
-                    <div class="flex">
-                        <input type="text" id="edit-name-input" class="w-full p-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500" value="">
-                        <button onclick="saveProfileName()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-r-lg transition">
-                            Save
-                        </button>
-                    </div>
-                    <div id="profile-error" class="text-red-500 text-sm mt-2 font-medium"></div>
-                </div>
-            </div>
-
-            <button onclick="signOutUser()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition shadow-md">
-                Sign Out
-            </button>
-        </div>
     </div>
 </body>
 </html>
