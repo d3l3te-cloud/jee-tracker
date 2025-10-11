@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JEE 4-Stage Syllabus Progress Tracker (Auto-Save)</title>
+    <title>JEE PROGRESS TRACKER </title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Inter font -->
@@ -43,13 +43,13 @@
     <!-- Firebase Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         setLogLevel('Debug');
 
-        // --- HARDCODED FIREBASE CONFIGURATION (Using the configuration you provided) ---
+        // --- HARDCODED FIREBASE CONFIGURATION ---
         const HARDCODED_FIREBASE_CONFIG = { 
              apiKey: "AIzaSyB9wE0qIEvaueXJzLyIQQmvhyGJC6k-j94", 
              authDomain: "jee-tracker-ead00.firebaseapp.com", 
@@ -60,9 +60,9 @@
         };
 
         // --- GLOBAL FIREBASE/APP VARIABLES ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : HARDCODED_FIREBASE_CONFIG.projectId;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : HARDCODED_FIREBASE_CONFIG.projectId; 
         const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
         let app, db, auth, userId = null;
         let userProgress = {}; 
@@ -80,28 +80,28 @@
             { id: 4, label: 'Revision', key: 'revision', color: 'bg-green-500' }
         ];
 
-        // --- CORE SYLLABUS STRUCTURE (using the simplified list from the existing file) ---
+        // --- UPDATED CORE SYLLABUS STRUCTURE ---
         const JEE_SYLLABUS = {
-            Physics: [
-                { name: "Mechanics", topics: ["Units, Dimensions & Errors","Errors and measurements", "Motion in 1D","Motion in 2D", "Newton's Laws of Motion (NLM)","Work Power Energy","Centre of mass", "Rotational Motion","Mechanical Properties of Solid","Mechanical Properties of Fluid"] },
-                { name: "Thermodynamics", topics: ["Thermal Properties", "Thermodynamics & KTG"] },
-                { name: "Waves", topics: ["SHM", "Waves",] },
-                { name: "Electro-Magnetism", topics: ["Electrostatics and electrostatic potential", "Current electricity","Capacitor","Magnetism","EMI","Alternating Current"] },
-                { name: "Optics and Modern Physics", topics: ["Ray Optics", "Wave Optics","Modern Physics","Electromagnetic Waves","Semiconductor"] }
-            ],
-            Chemistry: [
-                { name: "Physical Chemistry", topics: ["Mole Concept", "Atomic Structure", "Gaseous State","Thermodynamics","Chemical Equilibrium","Ionic Equilibrium","Redox Reaction","Solutions","Electrochemistry","Chemical Kinetics","Surface Chemistry"] },
-                { name: "Organic Chemistry", topics: ["Nomenclature","General Organic Chemistry (GOC)","Isomerism", "Hydrocarbons","Haloalkane & Haloarenes", "Alcohols, Phenols, Ethers","Aldehyde, Ketone, Carboxylic Acid","Amines","Biomolecules","Chemistry in everyday life","Polymer","Environmental Chemistry"] },
-                { name: "Inorganic Chemistry", topics: ["Periodic Properties of Elements", "Chemical Bonding","Salt Analysis","Metallurgy", "D and F Block","P block","S block", "Hydrogen"] }
-            ],
-            Mathematics: [
-                { name: "Algebra", topics: ["Basic Maths","Sets", "Complex Numbers", "Quadratic Equations","Sequence and Series","Permutations and Combinations","Binomial Theorem","Matrices","Determinants","Probability","Statistics"] },
-                { name: "Trigonometry", topics: ["Trigonometric Functions","Trigonometric Equation","Inverse Trigonometry","Solution Of Triangles"] },
-                { name: "Calculus", topics: ["Relation and Functions","MOD","Limits, Continuity & Differentiability", "AOD", "Indefinite Integration", "Definite Integration","Area Under Curves","Differential Equation"] },
-                { name: "Co-Ordinate Geometry", topics: ["Straight Lines","Circles","Parabola","Ellipse","Hyperbola"] },
-                { name: "Vector 3D", topics:["Vector","3 Dimentional Geometry"]}
-            ]
-        };
+            Physics: [
+                { name: "Mechanics", topics: ["Units, Dimensions & Errors","Errors and measurements", "Motion in 1D","Motion in 2D", "Newton's Laws of Motion (NLM)","Work Power Energy","Centre of mass", "Rotational Motion","Mechanical Properties of Solid","Mechanical Properties of Fluid"] },
+                { name: "Thermodynamics", topics: ["Thermal Properties", "Thermodynamics & KTG"] },
+                { name: "Waves", topics: ["SHM", "Waves",] },
+                { name: "Electro-Magnetism", topics: ["Electrostatics and electrostatic potential", "Current electricity","Capacitor","Magnetism","EMI","Alternating Current"] },
+                { name: "Optics and Modern Physics", topics: ["Ray Optics", "Wave Optics","Modern Physics","Electromagnetic Waves","Semiconductor"] }
+            ],
+            Chemistry: [
+                { name: "Physical Chemistry", topics: ["Mole Concept", "Atomic Structure", "Gaseous State","Thermodynamics","Chemical Equilibrium","Ionic Equilibrium","Redox Reaction","Solutions","Electrochemistry","Chemical Kinetics","Surface Chemistry"] },
+                { name: "Organic Chemistry", topics: ["Nomenclature","General Organic Chemistry (GOC)","Isomerism", "Hydrocarbons","Haloalkane & Haloarenes", "Alcohols, Phenols, Ethers","Aldehyde, Ketone, Carboxylic Acid","Amines","Biomolecules","Chemistry in everyday life","Polymer","Environmental Chemistry"] },
+                { name: "Inorganic Chemistry", topics: ["Periodic Properties of Elements", "Chemical Bonding","Salt Analysis","Metallurgy", "D and F Block","P block","S block", "Hydrogen"] }
+            ],
+            Mathematics: [
+                { name: "Algebra", topics: ["Basic Maths","Sets", "Complex Numbers", "Quadratic Equations","Sequence and Series","Permutations and Combinations","Binomial Theorem","Matrices","Determinants","Probability","Statistics"] },
+                { name: "Trigonometry", topics: ["Trigonometric Functions","Trigonometric Equation","Inverse Trigonometry","Solution Of Triangles"] },
+                { name: "Calculus", topics: ["Relation and Functions","MOD","Limits, Continuity & Differentiability", "AOD", "Indefinite Integration", "Definite Integration","Area Under Curves","Differential Equation"] },
+                { name: "Co-Ordinate Geometry", topics: ["Straight Lines","Circles","Parabola","Ellipse","Hyperbola"] },
+                { name: "Vector 3D", topics:["Vector","3 Dimentional Geometry"]}
+            ]
+        };
 
         // Calculate total topics once
         Object.values(JEE_SYLLABUS).forEach(groups => {
@@ -112,70 +112,95 @@
         
         // --- FIREBASE INITIALIZATION & AUTH (AUTO-SIGN-IN) ---
 
+        function setupUnauthenticatedSession(errorMessage) {
+            userId = 'UNAUTHENTICATED';
+            
+            const authStatusElement = document.getElementById('auth-status');
+            authStatusElement.innerHTML = `<span class="font-bold text-red-700">FATAL AUTH ERROR (Saving Disabled):</span> ${errorMessage}. <br> You must enable **Anonymous Authentication** in your Firebase Console to save progress automatically.`;
+
+            const headerElement = document.getElementById('session-display');
+            headerElement.innerHTML = `
+                <span class="text-3xl mr-2">❌</span>
+                <div class="text-left">
+                    <span class="text-xl font-bold text-red-600">UNSAVED SESSION</span>
+                    <p class="text-sm text-red-400">Progress will not be saved.</p>
+                </div>
+            `;
+            
+            document.getElementById('tracker-ui').classList.remove('hidden');
+            renderSyllabusUI();
+            updateOverallProgress(); 
+        }
+        
+        async function setupAuthenticatedSession(user) {
+            userId = user.uid;
+            
+            if (userProfile.name === 'Anonymous User') {
+                userProfile.name = `User ${user.uid.substring(0, 4)}`;
+                userProfile.avatar = generateRandomAvatarEmoji();
+            }
+            
+            const authStatusElement = document.getElementById('auth-status');
+            if (authStatusElement.textContent.includes('Initializing') || authStatusElement.textContent.includes('Warning: Custom token failed')) {
+                authStatusElement.textContent = `Progress automatically saved. Your ID: ${userId.substring(0, 8)}...`;
+            }
+
+            document.getElementById('tracker-ui').classList.remove('hidden');
+            updateHeaderUI();
+            loadProgressData(); 
+        }
+
+
         window.onload = async () => {
             const authStatusElement = document.getElementById('auth-status');
             
             try {
-                if (firebaseConfig) {
-                    app = initializeApp(firebaseConfig);
-                    db = getFirestore(app);
-                    auth = getAuth(app);
-                    
-                    // 1. Attempt Custom Token Sign-in (preferred), with anonymous fallback if token fails
+                if (!firebaseConfig) {
+                    throw new Error("Firebase configuration is missing.");
+                }
+
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                let signedInUser = null;
+
+                try {
                     if (initialAuthToken) {
                         try {
-                            await signInWithCustomToken(auth, initialAuthToken);
+                            const result = await signInWithCustomToken(auth, initialAuthToken);
+                            signedInUser = result.user;
                         } catch (tokenError) {
-                            console.warn("Custom token failed:", tokenError.message, "Attempting anonymous sign-in as fallback.");
-                            // Fallback to anonymous sign-in if custom token is mismatched or invalid
-                            await signInAnonymously(auth);
+                            console.warn("Custom token failed. Attempting anonymous sign-in as fallback.");
+                            const result = await signInAnonymously(auth); 
+                            signedInUser = result.user;
                             authStatusElement.textContent = 'Warning: Custom token failed. Signed in anonymously for persistence.';
                         }
                     } else {
-                        // If no token, use anonymous sign-in directly
-                        await signInAnonymously(auth);
+                        const result = await signInAnonymously(auth);
+                        signedInUser = result.user;
+                    }
+                    
+                    if (signedInUser) {
+                        await setupAuthenticatedSession(signedInUser);
+                    } else {
+                        throw new Error("Authentication process finished without a user.");
                     }
 
-                    // 2. Wait for auth state to be established
-                    onAuthStateChanged(auth, (user) => {
-                        if (user) {
-                            userId = user.uid;
-                            
-                            // Initialize local profile state if it wasn't already loaded from Firestore
-                            if (userProfile.name === 'Anonymous User') {
-                                userProfile.name = `User ${user.uid.substring(0, 4)}`;
-                                userProfile.avatar = generateRandomAvatarEmoji();
-                            }
-                            
-                            // Only update status if it's the default loading message or the warning message
-                            if (authStatusElement.textContent.includes('Initializing') || authStatusElement.textContent.includes('Warning: Custom token failed')) {
-                                authStatusElement.textContent = `Progress automatically saved. Your ID: ${userId.substring(0, 8)}...`;
-                            }
-
-                            document.getElementById('tracker-ui').classList.remove('hidden');
-                            updateHeaderUI();
-                            loadProgressData(); // Start listening for data
-                        } else {
-                            if (!authStatusElement.textContent.includes('Error:')) {
-                                authStatusElement.textContent = 'Error: Could not establish an anonymous tracking session.';
-                            }
-                        }
-                    });
-
-                } else {
-                    console.error("Firebase config missing. Cannot save data.");
-                    authStatusElement.textContent = 'ERROR: Firebase configuration is missing. Data saving is disabled.';
+                } catch (authError) {
+                    console.error("Authentication Error (Saving Disabled):", authError);
+                    setupUnauthenticatedSession(authError.message);
                 }
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                // This catch handles general initialization errors outside of the sign-in logic
-                authStatusElement.textContent = `Error during setup: ${error.message}`;
+                authStatusElement.textContent = `CRITICAL ERROR: ${error.message}`;
+                setupUnauthenticatedSession(error.message);
             }
         };
 
+
         function updateHeaderUI() {
-            // Update the header text to show the current anonymous session ID
             const headerElement = document.getElementById('session-display');
             if (userId) {
                 headerElement.innerHTML = `
@@ -197,7 +222,7 @@
         // --- FIREBASE DATA FUNCTIONS ---
 
         const getProgressDocRef = () => {
-            if (!db || !userId) return null;
+            if (!db || !userId || userId === 'UNAUTHENTICATED') return null;
             // Private data storage path: /artifacts/{appId}/users/{userId}/jee_4stage_tracker
             const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_tracker`; 
             return doc(db, userPath, "progress");
@@ -206,10 +231,9 @@
         const initializeUserProfile = async (uid, name, avatar) => {
             const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_tracker`, "progress");
             try {
-                // Use merge: true to avoid deleting existing fields if they exist (though 'topics' is initialized empty here)
                 await setDoc(docRef, { 
                     profile: { name, avatar, createdAt: new Date().toISOString() },
-                    topics: {} // Initialize empty topics object
+                    topics: {} 
                 }, { merge: true });
             } catch (error) {
                  console.error("Error initializing user profile:", error);
@@ -218,14 +242,17 @@
 
         const loadProgressData = () => {
             const progressDocRef = getProgressDocRef();
-            if (!progressDocRef) return;
+            if (!progressDocRef) {
+                renderSyllabusUI();
+                updateOverallProgress();
+                return;
+            }
 
             onSnapshot(progressDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     
                     if (data.profile) {
-                         // Only update profile if data exists, but avoid overwriting a saved custom name if one was added later
                          if (data.profile.name && data.profile.name.startsWith('User')) {
                              userProfile.name = data.profile.name;
                              userProfile.avatar = data.profile.avatar;
@@ -249,9 +276,9 @@
         };
 
         const updateProgressInFirestore = async (topicKey, stage) => {
-            if (!db || !userId) {
+            if (!db || !userId || userId === 'UNAUTHENTICATED') {
                 console.error("Cannot save data: User not authenticated.");
-                showNotification('Save Error', 'Cannot save data. Session not established.', 'bg-red-500');
+                showNotification('Save Error', 'Cannot save data. Session not established. Check status bar for error.', 'bg-red-500');
                 return;
             }
 
@@ -265,13 +292,13 @@
                 showNotification('Topic Complete!', `Congrats! You finished the **${topicKey.split('-')[1]}** revision milestone.`, 'bg-green-600');
             }
             
+            // Check for total completion based on the new stage 4 count
             const totalRevised = Object.values(userProgress).filter(s => s === 4).length;
             if (totalRevised === totalTopicsCount) {
                 showNotification('Syllabus Mastered!', '🥳 You completed all JEE topics! You are ready for the exam!', 'bg-indigo-600', 8000);
             }
 
             try {
-                // Update the single field using updateDoc for efficiency
                 await updateDoc(docRef, { [`topics.${topicKey}`]: stage });
             } catch (error) {
                 console.error("Error updating document:", error);
@@ -279,7 +306,7 @@
             }
         };
 
-        // --- UI RENDERING & LOGIC (Updated to reflect new CSS colors) ---
+        // --- UI RENDERING & LOGIC (Updated for 4-Bar Analysis) ---
 
         function showNotification(title, message, bgColor, duration = 4000) {
             const container = document.getElementById('notification-container');
@@ -293,19 +320,32 @@
             container.appendChild(toast);
 
             setTimeout(() => {
-                // Use setTimeout to ensure the fadeOut animation runs after the initial duration
                 setTimeout(() => {
                     toast.classList.add('opacity-0');
-                    // Remove element after fadeOut transition completes (0.5s)
                     setTimeout(() => toast.remove(), 500); 
                 }, duration - 500); 
-            }, 0); // Start showing immediately
+            }, 0); 
         }
+
+        const calculatePercentage = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) : 0;
 
         function updateOverallProgress() {
             let analysis = {
-                overall: { totalTopics: totalTopicsCount, totalStages: totalTopicsCount * 4, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } },
-                subjects: { Physics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Chemistry: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Mathematics: { totalTopics: 0, totalStages: 0, completedStages: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } } }
+                totalTopics: totalTopicsCount,
+                completedRevisionTopics: 0,
+                completedMilestones: 0, // Kept for subject breakdown
+                totalMilestones: totalTopicsCount * 4,
+                
+                // New 4-Bar metrics
+                progressByStage: {
+                    1: { label: 'Lecture', count: 0, percentage: 0, color: 'bg-yellow-500', icon: '📝' },
+                    2: { label: 'Practice', count: 0, percentage: 0, color: 'bg-orange-500', icon: '🧠' },
+                    3: { label: 'PYQ', count: 0, percentage: 0, color: 'bg-purple-500', icon: '🏆' },
+                    4: { label: 'Revision', count: 0, percentage: 0, color: 'bg-green-500', icon: '✅' }
+                },
+
+                // Subject breakdown uses old milestone calculation
+                subjects: { Physics: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Chemistry: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } }, Mathematics: { totalTopics: 0, completedMilestones: 0, percentage: 0, stages: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 } } }
             };
             
             Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
@@ -315,53 +355,76 @@
                         const stage = userProgress[topicKey] || 0;
                         
                         const sub = analysis.subjects[subject];
-                        // Null check added for safety, though structure assumes subjects exist
                         if (sub) { 
                             sub.totalTopics++;
-                            sub.totalStages += 4;
-                            sub.completedStages += stage;
+                            sub.completedMilestones += stage;
                             sub.stages[stage]++;
+                            
+                            analysis.completedMilestones += stage;
+                        }
 
-                            analysis.overall.completedStages += stage;
-                            analysis.overall.stages[stage]++;
+                        // Calculate new 4-bar progress
+                        if (stage >= 1) analysis.progressByStage[1].count++;
+                        if (stage >= 2) analysis.progressByStage[2].count++;
+                        if (stage >= 3) analysis.progressByStage[3].count++;
+                        if (stage === 4) {
+                            analysis.progressByStage[4].count++;
+                            analysis.completedRevisionTopics++;
                         }
                     });
                 });
             });
 
-            const calculatePercentage = (completed, total) => total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+            // Calculate percentages for the 4 bars
+            analysis.progressByStage[1].percentage = calculatePercentage(analysis.progressByStage[1].count, totalTopicsCount);
+            analysis.progressByStage[2].percentage = calculatePercentage(analysis.progressByStage[2].count, totalTopicsCount);
+            analysis.progressByStage[3].percentage = calculatePercentage(analysis.progressByStage[3].count, totalTopicsCount);
+            analysis.progressByStage[4].percentage = calculatePercentage(analysis.progressByStage[4].count, totalTopicsCount);
 
-            analysis.overall.percentage = calculatePercentage(analysis.overall.completedStages, analysis.overall.totalStages);
+
+            // Calculate percentages for the Subject Breakdown (Milestone based)
             Object.keys(analysis.subjects).forEach(subject => {
                 const data = analysis.subjects[subject];
-                data.percentage = calculatePercentage(data.completedStages, data.totalStages);
+                const totalSubMilestones = data.totalTopics * 4;
+                data.percentage = calculatePercentage(data.completedMilestones, totalSubMilestones);
             });
             
             // 3. Update UI
-            const topicsCompleted = analysis.overall.stages[4];
-            const overallPercentage = analysis.overall.percentage;
-
-            const progressBar = document.getElementById('progress-bar');
-            const progressText = document.getElementById('progress-text');
-            const topicsCompletedDisplay = document.getElementById('topics-completed');
+            const topicsRevisedDisplay = document.getElementById('topics-revised');
             const totalTopicsDisplay = document.getElementById('total-topics');
-
-
-            if (progressBar) {
-                progressBar.style.width = `${overallPercentage}%`;
-                progressText.textContent = `Overall Progress: ${overallPercentage}% (${analysis.overall.completedStages}/${analysis.overall.totalStages} milestones)`;
-                topicsCompletedDisplay.textContent = `${topicsCompleted}`;
-                totalTopicsDisplay.textContent = `${totalTopicsCount}`;
-
-
-                let colorClass = 'bg-red-500';
-                if (overallPercentage > 25) colorClass = 'bg-orange-500';
-                if (overallPercentage > 50) colorClass = 'bg-yellow-500';
-                if (overallPercentage > 75) colorClass = 'bg-green-500';
-
-                progressBar.className = `h-4 rounded-full transition-all duration-500 ease-out ${colorClass}`;
-            }
             
+            if (topicsRevisedDisplay) {
+                topicsRevisedDisplay.textContent = `${analysis.completedRevisionTopics}`;
+                totalTopicsDisplay.textContent = `${totalTopicsCount}`;
+            }
+
+            // Render the 4 independent progress bars
+            const progressContainer = document.getElementById('independent-progress-bars');
+            if (progressContainer) {
+                let barsHtml = '';
+                [1, 2, 3, 4].forEach(stageId => {
+                    const stageData = analysis.progressByStage[stageId];
+                    barsHtml += `
+                        <div class="p-4 rounded-xl shadow-lg border border-gray-100 bg-white">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                                    <span class="text-xl mr-2">${stageData.icon}</span> ${stageData.label} Progress
+                                </h3>
+                                <span class="text-2xl font-extrabold text-indigo-600">${stageData.percentage}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div class="h-3 rounded-full transition-all duration-500 ease-out ${stageData.color}" 
+                                     style="width: ${stageData.percentage}%">
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-2">${stageData.count} / ${totalTopicsCount} Topics Completed</p>
+                        </div>
+                    `;
+                });
+                progressContainer.innerHTML = barsHtml;
+            }
+
+            // Update Subject Breakdown
             ['Physics', 'Chemistry', 'Mathematics'].forEach(subject => {
                 const data = analysis.subjects[subject];
                 if(document.getElementById(`${subject.toLowerCase()}-progress`)) {
@@ -383,7 +446,7 @@
             
             let overallBacklogHtml = '';
             for (let i = 1; i <= 4; i++) {
-                const stageCount = analysis.overall.stages[i];
+                const stageCount = analysis.subjects.Physics.stages[i] + analysis.subjects.Chemistry.stages[i] + analysis.subjects.Mathematics.stages[i];
                 if (stageCount > 0) {
                     const stageLabel = stageMapping[i];
                     let bgColor = 'bg-gray-200';
@@ -513,7 +576,7 @@
                             input.name = topicKey; 
                             input.value = stage.id;
                             input.checked = isChecked;
-                            input.className = `stage-${stage.id}`; // This links to the new CSS classes
+                            input.className = `stage-${stage.id}`; 
                             input.addEventListener('change', handleStageChange);
 
                             const labelEl = document.createElement('label');
@@ -569,28 +632,32 @@
             
             <!-- Overall Progress Card -->
             <div id="progress-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-indigo-500">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div class="flex flex-col p-3 bg-blue-50 rounded-lg">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="flex flex-col p-3 bg-blue-50 rounded-xl">
                         <span class="text-lg font-bold text-gray-800">Total Topics:</span>
-                        <span id="total-topics" class="text-3xl font-extrabold text-blue-600">--</span>
+                        <span id="total-topics" class="text-4xl font-extrabold text-blue-600">--</span>
                     </div>
-                    <div class="flex flex-col p-3 bg-green-50 rounded-lg">
-                        <span class="text-lg font-bold text-gray-800">Topics Revised (4/4):</span>
-                        <span id="topics-completed" class="text-3xl font-extrabold text-green-600">--</span>
+                    <div class="flex flex-col p-3 bg-green-50 rounded-xl">
+                        <span class="text-lg font-bold text-gray-800">Topics Fully Revised (Stage 4):</span>
+                        <span id="topics-revised" class="text-4xl font-extrabold text-green-600">--</span>
                     </div>
-                    <div class="flex flex-col p-3 bg-indigo-50 rounded-lg">
-                        <span class="text-lg font-bold text-gray-800">Overall Milestone Progress:</span>
-                        <span id="progress-text" class="text-xl font-extrabold text-indigo-600 mt-1">Loading progress...</span>
+                    <div class="flex flex-col p-3 bg-indigo-50 rounded-xl">
+                        <span class="text-lg font-bold text-gray-800">Overall Progress Tracker:</span>
+                        <span class="text-sm text-indigo-400 mt-1">Total possible milestones: 344 <span id="total-topics" class="font-bold">--</span></span>
+                        <span class="text-2xl font-extrabold text-indigo-600 mt-1">Check Your analysis below 👇</span>
                     </div>
                 </div>
                 
-                <!-- Overall Progress Bar -->
-                <div class="w-full bg-gray-200 rounded-full h-4 mb-6">
-                    <div id="progress-bar" class="h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                <h3 class="text-2xl font-black text-indigo-700 mb-6 border-b pb-2">Independent Progress (Topics Completed)</h3>
+
+                <!-- Independent Progress Bars -->
+                <div id="independent-progress-bars" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- Dynamic bar content will be inserted here by JavaScript -->
+                    <div class="p-4 rounded-xl shadow-lg border border-gray-100 bg-white text-center text-gray-500">Loading analysis...</div>
                 </div>
 
-                <!-- Subject-wise Percentage Breakdown -->
-                <h3 class="text-xl font-bold text-gray-800 mb-4 border-b pb-1">Subject Breakdown</h3>
+                <h3 class="text-xl font-bold text-gray-800 mt-10 mb-4 border-b pb-1">Subject Breakdown (Milestone % based)</h3>
+                <!-- Subject-wise Percentage Breakdown (Kept for detailed subject analysis) -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <!-- Physics -->
                     <div class="p-3 bg-sky-50 rounded-lg shadow-md">
@@ -630,9 +697,9 @@
                 </div>
             </div>
 
-            <!-- Stage Analysis Card -->
+            <!-- Stage Analysis Card (Backlog Summary) -->
             <div id="analysis-container" class="bg-white p-6 rounded-xl shadow-xl mb-10 border-l-4 border-purple-500">
-                <h2 class="text-2xl font-black text-purple-700 mb-4">Topic Stage Analysis</h2>
+                <h2 class="text-2xl font-black text-purple-700 mb-4">Topic Stage Analysis (Backlogs)</h2>
                 <p class="text-gray-600 mb-6">This breakdown shows the number of topics currently stuck at a specific milestone.</p>
                 
                 <div id="stage-analysis-content" class="grid grid-cols-1 md:grid-cols-4 gap-6">
