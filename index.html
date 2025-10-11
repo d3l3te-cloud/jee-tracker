@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JEE Progress Tracker</title>
+    <title>JEE 4-Stage Independent Progress Tracker</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Inter font -->
@@ -20,13 +20,41 @@
         .stage-pyq-color { @apply bg-purple-500; }
         .stage-revision-color { @apply bg-green-500; }
 
+        /* Modal Backdrop */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50; 
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-backdrop.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: translateY(-50px);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-backdrop.show .modal-content {
+            transform: translateY(0);
+        }
+
         /* Notification Toast Container */
         #notification-container {
             position: fixed; top: 20px; right: 20px; z-index: 60;
             max-width: 90%; width: 350px;
         }
         .notification-toast {
-            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in forwards 4s;
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in forwards 9.5s; /* Increased duration to 9.5s total */
         }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateY(-20px); } }
@@ -41,32 +69,27 @@
 
         setLogLevel('Debug');
 
-        // --- HARDCODED FIREBASE CONFIGURATION ---
-        const HARDCODED_FIREBASE_CONFIG = { 
-             apiKey: "AIzaSyB9wE0qIEvaueXJzLyIQQmvhyGJC6k-j94", 
-             authDomain: "jee-tracker-ead00.firebaseapp.com", 
-             projectId: "jee-tracker-ead00", 
-             storageBucket: "jee-tracker-ead00.firebasestorage.app", 
-             messagingSenderId: "818054839055", 
-             appId: "1:818054839055:web:139434c214d335247e5c7a" 
-        };
+        // --- GLOBAL FIREBASE/APP VARIABLES (Mandatory) ---
+        // Use environment-provided configuration for Firebase
+        const systemFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const firebaseConfig = systemFirebaseConfig;
 
-        // --- GLOBAL FIREBASE/APP VARIABLES ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : HARDCODED_FIREBASE_CONFIG.projectId; 
-        const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
+        // Use the system-provided app ID as fallback project ID if needed.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig?.projectId || 'default-app-id'; 
+        
+        // Use the system-provided auth token
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
+        const SESSION_STORAGE_KEY = 'jee_tracker_session_id';
 
         let app, db, auth, userId = null;
-        // userProgress now stores an object for each topic, not a single number
+        let sessionId = null; 
         let userProgress = {}; 
-        let totalTopicsCount = 0;
         let userProfile = { name: 'Anonymous User', avatar: '🚀' }; 
-        // Filter now uses the stage key (e.g., 'lecture', 'pyq')
+        let totalTopicsCount = 0;
         let currentFilterKey = null; 
 
         const AVATAR_EMOJIS = ['🐶', '🐱', '🦊', '🐻', '🐼', '🐨', '🐅', '🐘', '🐒', '🦖', '🦋', '🦉', '🐢', '🍎', '🍓', '🍍', '🍉', '🥝', '🥭', '🍇'];
         
-        // Structure defining the 4 independent stages (icon property removed)
         const STAGE_KEYS = [
             { key: 'lecture', label: 'Lecture', colorClass: 'stage-lecture-color' },
             { key: 'practice', label: 'Practice', colorClass: 'stage-practice-color' },
@@ -97,10 +120,12 @@
             ]
         };
 
-        // Calculate total topics once
-        Object.values(JEE_SYLLABUS).forEach(groups => {
+        // Calculate total topics once 
+        Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
             groups.forEach(group => {
-                totalTopicsCount += group.topics.length;
+                group.topics.forEach(topic => {
+                    totalTopicsCount++;
+                });
             });
         });
         
@@ -110,47 +135,47 @@
             userId = 'UNAUTHENTICATED';
             
             const authStatusElement = document.getElementById('auth-status');
-            authStatusElement.innerHTML = `<span class="font-bold text-red-700">FATAL AUTH ERROR (Saving Disabled):</span> ${errorMessage}. <br> Enable **Anonymous Authentication** in Firebase to save progress automatically.`;
+            authStatusElement.innerHTML = `<span class="font-bold text-red-700">FATAL AUTH ERROR (Saving Disabled):</span> ${errorMessage}. <br> Please check your Firebase configuration and security rules.`;
 
-            const headerElement = document.getElementById('session-display');
-            headerElement.innerHTML = `
+            document.getElementById('session-display').innerHTML = `
                 <span class="text-3xl mr-2">❌</span>
                 <div class="text-left">
-                    <span class="text-xl font-bold text-red-600">UNSAVED SESSION</span>
-                    <p class="text-sm text-red-400">Progress will not be saved.</p>
+                    <span class="text-xl font-bold text-red-600">ERROR SESSION</span>
+                    <p class="text-sm text-red-400">Saving is disabled.</p>
                 </div>
             `;
             
+            // Show UI even if unauthenticated, but saving is disabled
             document.getElementById('tracker-ui').classList.remove('hidden');
             renderSyllabusUI();
             updateOverallProgress(); 
         }
         
         async function setupAuthenticatedSession(user) {
-            userId = user.uid;
+            userId = user.uid; 
             
-            if (userProfile.name === 'Anonymous User') {
-                userProfile.name = `User ${user.uid.substring(0, 4)}`;
-                userProfile.avatar = generateRandomAvatarEmoji();
-            }
+            // Check localStorage for an existing session ID
+            const storedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
             
-            const authStatusElement = document.getElementById('auth-status');
-            if (authStatusElement.textContent.includes('Initializing') || authStatusElement.textContent.includes('Warning: Custom token failed')) {
-                authStatusElement.textContent = `Progress automatically saved. Your ID: ${userId.substring(0, 8)}...`;
+            if (storedSessionId) {
+                // If ID found, load it
+                sessionId = storedSessionId;
+                document.getElementById('tracker-ui').classList.remove('hidden');
+                updateHeaderUI();
+                loadProgressData(); 
+                document.getElementById('auth-status').textContent = `Session ${sessionId} is loaded. Progress automatically saved.`;
+            } else {
+                // If no ID found, force user to create/load one
+                openSessionSetupModal();
+                document.getElementById('auth-status').textContent = `Authentication successful. Please create or load a session ID to begin.`;
             }
-
-            document.getElementById('tracker-ui').classList.remove('hidden');
-            updateHeaderUI();
-            loadProgressData(); 
         }
 
 
         window.onload = async () => {
-            const authStatusElement = document.getElementById('auth-status');
-            
             try {
                 if (!firebaseConfig) {
-                    throw new Error("Firebase configuration is missing.");
+                    throw new Error("Firebase configuration is missing in the environment (__firebase_config).");
                 }
 
                 app = initializeApp(firebaseConfig);
@@ -159,6 +184,7 @@
                 
                 let signedInUser = null;
 
+                // Anonymous sign-in is required to get an auth token for database access
                 try {
                     if (initialAuthToken) {
                         try {
@@ -168,7 +194,6 @@
                             console.warn("Custom token failed. Attempting anonymous sign-in as fallback.");
                             const result = await signInAnonymously(auth); 
                             signedInUser = result.user;
-                            authStatusElement.textContent = 'Warning: Custom token failed. Signed in anonymously for persistence.';
                         }
                     } else {
                         const result = await signInAnonymously(auth);
@@ -188,7 +213,7 @@
 
             } catch (error) {
                 console.error("Firebase Initialization Error:", error);
-                authStatusElement.textContent = `CRITICAL ERROR: ${error.message}`;
+                document.getElementById('auth-status').textContent = `CRITICAL ERROR: ${error.message}`;
                 setupUnauthenticatedSession(error.message);
             }
         };
@@ -196,12 +221,46 @@
 
         function updateHeaderUI() {
             const headerElement = document.getElementById('session-display');
-            if (userId) {
+            
+            // Initialize with a default profile if session is new and profile wasn't set by startNewSession
+            if (!userProfile.avatar) {
+                 userProfile.avatar = generateRandomAvatarEmoji();
+            }
+
+            if (sessionId) {
+                // Modified: Display Session ID prominently with copy/switch buttons
                 headerElement.innerHTML = `
                     <span id="profile-avatar" class="text-3xl mr-2">${userProfile.avatar}</span>
                     <div class="text-left">
-                        <span class="text-xl font-bold text-gray-800">${userProfile.name}</span>
-                        <p class="text-sm text-gray-500">Session ID: ${userId.substring(0, 8)}...</p>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl font-bold text-gray-800">${userProfile.name}</span>
+                            <button onclick="openNameEditModal('${userProfile.name}')" 
+                                    class="text-gray-500 hover:text-indigo-600 transition duration-150 p-1 rounded-full hover:bg-indigo-100" 
+                                    title="Edit Profile Name">
+                                <!-- Pencil Icon -->
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
+                                    <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="text-sm text-gray-500 flex items-center mt-1">
+                            Session ID: <span id="current-session-id" class="font-mono font-semibold text-indigo-600 ml-1 select-all">${sessionId || '...'}</span> 
+                            <button onclick="copySessionId()" class="ml-2 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-md hover:bg-indigo-100 transition duration-150" title="Copy Session ID">
+                                Copy
+                            </button>
+                            <button onclick="openSessionSetupModal()" class="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-md hover:bg-gray-200 transition duration-150" title="Switch Session">
+                                Switch
+                            </button>
+                        </p>
+                    </div>
+                `;
+            } else {
+                // Initial loading state or error state
+                headerElement.innerHTML = `
+                    <span class="text-3xl mr-2">...</span>
+                    <div class="text-left">
+                        <span class="text-xl font-bold text-gray-800">Choose Session ID...</span>
+                        <p class="text-sm text-gray-500">Connecting to database...</p>
                     </div>
                 `;
             }
@@ -213,24 +272,46 @@
             return AVATAR_EMOJIS[randomIndex];
         };
 
+        const generateShortSessionId = () => {
+            // Generates a 6-character alphanumeric ID
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        };
+
         const calculatePercentage = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+        
+        window.copySessionId = function() {
+            const idElement = document.getElementById('current-session-id');
+            if (idElement && idElement.textContent) {
+                // Use document.execCommand('copy') as navigator.clipboard may fail in iframe
+                const tempInput = document.createElement('textarea');
+                tempInput.value = idElement.textContent;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showNotification('Copied!', `Session ID **${idElement.textContent}** copied to clipboard.`, 'bg-indigo-600', 3000);
+            }
+        }
 
 
         // --- FIREBASE DATA FUNCTIONS ---
 
         const getProgressDocRef = () => {
-            if (!db || !userId || userId === 'UNAUTHENTICATED') return null;
-            const userPath = `/artifacts/${appId}/users/${userId}/jee_4stage_independent_tracker`; 
-            return doc(db, userPath, "progress");
+            if (!db || !sessionId) return null;
+            // Uses a public collection keyed by the Session ID
+            const sessionPath = `/artifacts/${appId}/public/data/jee_sessions`; 
+            return doc(db, sessionPath, sessionId);
         };
 
-        const initializeUserProfile = async (uid, name, avatar) => {
-            const docRef = doc(db, `/artifacts/${appId}/users/${uid}/jee_4stage_independent_tracker`, "progress");
+        const initializeUserProfile = async (name, avatar) => {
+            const docRef = getProgressDocRef();
+            if (!docRef) return;
             try {
+                // Only create document if it doesn't exist
                 await setDoc(docRef, { 
                     profile: { name, avatar, createdAt: new Date().toISOString() },
                     topics: {} 
-                }, { merge: true });
+                }, { merge: true }); // Use merge to avoid overwriting existing data if ID was reused
             } catch (error) {
                  console.error("Error initializing user profile:", error);
             }
@@ -249,30 +330,47 @@
                     const data = docSnap.data();
                     
                     if (data.profile) {
-                         if (data.profile.name && data.profile.name.startsWith('User')) {
-                             userProfile.name = data.profile.name;
-                             userProfile.avatar = data.profile.avatar;
-                             updateHeaderUI();
-                        }
+                        userProfile.name = data.profile.name || `User ${sessionId}`;
+                        userProfile.avatar = data.profile.avatar || generateRandomAvatarEmoji();
+                    } else {
+                        // Document exists but profile is missing, initialize it now (e.g. if created from an older version)
+                        // Use current local profile (set during startNewSession or default)
+                        initializeUserProfile(userProfile.name, userProfile.avatar);
                     }
-                    // Load the new object-based progress structure
+
                     userProgress = data.topics || {};
 
                 } else {
-                    console.log("No progress document found. Initializing profile with default values.");
-                    initializeUserProfile(userId, userProfile.name, userProfile.avatar);
+                    console.log("No progress document found for this session ID. Creating new profile.");
+                    // Set default profile before initialization (only if local profile is not already set)
+                    if (userProfile.name === 'Anonymous User') {
+                        userProfile.name = `User ${sessionId}`;
+                        userProfile.avatar = generateRandomAvatarEmoji();
+                    }
+                    initializeUserProfile(userProfile.name, userProfile.avatar);
                 }
                 
-                renderFilterStatus(); // Update filter display
+                updateHeaderUI();
+                renderFilterStatus(); 
                 renderSyllabusUI();
                 updateOverallProgress();
 
             }, (error) => {
-                console.error("Error listening to progress data:", error);
+                console.error("Error listening to progress data (Permission Denied is common if rules are strict):", error);
+                showNotification('Connection Error', 'Failed to listen for real-time updates. Check console for permission issues.', 'bg-red-700');
             });
         };
 
         window.toggleStageCompletion = function(topicKey, stageKey) {
+            if (!sessionId) {
+                showNotification('Session Required', 'Please create or load a Session ID first.', 'bg-red-500');
+                return;
+            }
+            if (userId === 'UNAUTHENTICATED') {
+                showNotification('Saving Disabled', 'Cannot save progress due to a fatal authentication error.', 'bg-red-500');
+                return;
+            }
+
             // Get current status, or default to false
             const isCompleted = userProgress[topicKey]?.[stageKey] || false;
             const newStatus = !isCompleted;
@@ -289,8 +387,8 @@
         }
 
         const updateProgressInFirestore = async (topicKey, stageKey, newStatus) => {
-            if (!db || !userId || userId === 'UNAUTHENTICATED') {
-                console.error("Cannot save data: User not authenticated.");
+            if (!db || !sessionId) {
+                console.error("Cannot save data: Session ID not set.");
                 showNotification('Save Error', 'Cannot save data. Session not established.', 'bg-red-500');
                 return;
             }
@@ -298,7 +396,7 @@
             const docRef = getProgressDocRef();
             
             try {
-                // Use the new path structure: topics["topic-key"][stageKey] = newStatus
+                // Using updateDoc for topic progress is usually fine since the profile/topics structure exists
                 await updateDoc(docRef, { [`topics.${topicKey}.${stageKey}`]: newStatus });
                 
                 if (stageKey === 'revision' && newStatus) {
@@ -310,10 +408,155 @@
             }
         };
 
+        // --- SESSION SETUP MODAL LOGIC (NEW) ---
+        
+        window.openSessionSetupModal = function() {
+            // This modal is used for initial setup AND for switching sessions
+            document.getElementById('session-setup-modal').classList.add('show');
+            document.getElementById('load-session-input').focus();
+        }
+
+        function closeSessionSetupModal() {
+             document.getElementById('session-setup-modal').classList.remove('show');
+        }
+
+        window.startNewSession = function() {
+            if (userId === 'UNAUTHENTICATED') {
+                 showNotification('Saving Disabled', 'Cannot create session: fatal authentication error detected.', 'bg-red-500');
+                 return;
+            }
+
+            const nameInput = document.getElementById('new-session-name-input');
+            const newName = nameInput.value.trim();
+
+            if (newName.length < 2 || newName.length > 30) {
+                showNotification('Validation Error', 'Session Name must be between 2 and 30 characters.', 'bg-yellow-500');
+                return;
+            }
+
+
+            const newId = generateShortSessionId();
+            localStorage.setItem(SESSION_STORAGE_KEY, newId);
+            sessionId = newId;
+            closeSessionSetupModal();
+            
+            // Set the user profile based on input
+            userProfile.name = newName;
+            userProfile.avatar = generateRandomAvatarEmoji();
+
+            document.getElementById('tracker-ui').classList.remove('hidden');
+            updateHeaderUI();
+            loadProgressData();
+            
+            // IMPORTANT: Updated instruction to tell the user to copy the ID
+            showNotification(
+                'Session Created! **CRITICAL STEP**', 
+                `Welcome, **${newName}**! Your unique Session ID is **${newId}**. You **MUST** click the 'Copy' button in the header now to save this ID.`, 
+                'bg-green-600', 
+                10000 // Long display time for critical instruction
+            );
+            document.getElementById('auth-status').textContent = `Session ${sessionId} is loaded. Progress automatically saved.`;
+        }
+
+        window.loadExistingSession = function() {
+            if (userId === 'UNAUTHENTICATED') {
+                 showNotification('Saving Disabled', 'Cannot load session: fatal authentication error detected.', 'bg-red-500');
+                 return;
+            }
+            const input = document.getElementById('load-session-input');
+            const inputId = input.value.trim().toUpperCase();
+
+            if (inputId.length !== 6 || !/^[A-Z0-9]{6}$/.test(inputId)) {
+                showNotification('Invalid ID', 'Session ID must be exactly 6 alphanumeric characters.', 'bg-red-500');
+                return;
+            }
+            
+            // Set the ID, save to storage, and reload data
+            localStorage.setItem(SESSION_STORAGE_KEY, inputId);
+            sessionId = inputId;
+            // Reset local profile to trigger full load from Firestore
+            userProfile = { name: 'Anonymous User', avatar: '🚀' }; 
+            
+            closeSessionSetupModal();
+            
+            document.getElementById('tracker-ui').classList.remove('hidden');
+            updateHeaderUI();
+            loadProgressData(); // This will now fetch data for the new sessionId
+            showNotification('Session Loaded', `Data loaded for Session ID **${inputId}**.`, 'bg-indigo-600', 5000);
+            document.getElementById('auth-status').textContent = `Session ${sessionId} is loaded. Progress automatically saved.`;
+        }
+
+
+        // --- NAME EDIT MODAL LOGIC ---
+
+        window.openNameEditModal = function(currentName) {
+            if (!sessionId) {
+                 showNotification('Session Required', 'Please create or load a Session ID first.', 'bg-red-500');
+                 return;
+            }
+            if (userId === 'UNAUTHENTICATED') {
+                 showNotification('Saving Disabled', 'Cannot update profile: fatal authentication error detected.', 'bg-red-500');
+                 return;
+            }
+
+            const modal = document.getElementById('name-edit-modal');
+            const input = document.getElementById('new-name-input');
+            
+            input.value = currentName;
+            modal.classList.add('show');
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveNewUserName();
+                }
+            };
+            input.focus();
+        }
+
+        window.closeNameEditModal = function() {
+            document.getElementById('name-edit-modal').classList.remove('show');
+        }
+
+        window.saveNewUserName = async function() {
+            const input = document.getElementById('new-name-input');
+            let newName = input.value.trim();
+            
+            if (newName.length < 2 || newName.length > 30) {
+                showNotification('Validation Error', 'Name must be between 2 and 30 characters.', 'bg-yellow-500');
+                return;
+            }
+
+            if (newName === userProfile.name) {
+                closeNameEditModal();
+                return; 
+            }
+            
+            const docRef = getProgressDocRef();
+            if (!docRef) {
+                showNotification('Save Error', 'Cannot save data. Session not established.', 'bg-red-500');
+                return;
+            }
+            
+            try {
+                // Use setDoc with merge: true to ensure the document exists and safely update the nested 'profile.name' field.
+                await setDoc(docRef, { 
+                    profile: { name: newName } 
+                }, { merge: true });
+
+                userProfile.name = newName; 
+                updateHeaderUI(); 
+                closeNameEditModal();
+                showNotification('Success', `Profile name updated to **${newName}**!`, 'bg-indigo-600');
+            } catch (error) {
+                console.error("Error updating profile name:", error);
+                showNotification('Database Write Failed', 'Could not save new name. Check console for details.', 'bg-red-700');
+            }
+        }
+
+
         // --- FILTER LOGIC ---
         window.setFilter = function(stageKey) {
             if (currentFilterKey === stageKey) {
-                // Toggle off if already active
                 currentFilterKey = null;
             } else {
                 currentFilterKey = stageKey;
@@ -349,7 +592,11 @@
         function showNotification(title, message, bgColor, duration = 4000) {
             const container = document.getElementById('notification-container');
             const toast = document.createElement('div');
-            toast.className = `notification-toast p-4 mb-3 rounded-lg shadow-xl text-white ${bgColor}`;
+            // Notification toast CSS ensures it slides out after 9.5s total (duration + 0.5s fadeOut)
+            const animationDuration = (duration / 1000) - 0.5; // Seconds before fadeOut starts
+            toast.className = `p-4 mb-3 rounded-lg shadow-xl text-white ${bgColor}`;
+            toast.style.animation = `slideIn 0.3s ease-out, fadeOut 0.5s ease-in forwards ${animationDuration}s`;
+
             toast.innerHTML = `
                 <div class="font-bold text-lg mb-1">${title}</div>
                 <div class="text-sm">${message}</div>
@@ -357,12 +604,10 @@
             
             container.appendChild(toast);
 
+            // Manual removal after animation finishes
             setTimeout(() => {
-                setTimeout(() => {
-                    toast.classList.add('opacity-0');
-                    setTimeout(() => toast.remove(), 500); 
-                }, duration - 500); 
-            }, 0); 
+                toast.remove();
+            }, duration); 
         }
 
         function updateOverallProgress() {
@@ -370,21 +615,19 @@
                 totalTopics: totalTopicsCount,
                 completedRevisionTopics: 0,
                 
-                // Track completion count for each independent stage
                 progressByStage: STAGE_KEYS.reduce((acc, stage) => {
                     acc[stage.key] = { label: stage.label, count: 0, percentage: 0, colorClass: stage.colorClass };
                     return acc;
                 }, {}),
 
-                // For subject breakdown, we track total completed *stages* (4 stages per topic)
                 subjects: { Physics: { totalTopics: 0, completedStages: 0, percentage: 0 }, Chemistry: { totalTopics: 0, completedStages: 0, percentage: 0 }, Mathematics: { totalTopics: 0, completedStages: 0, percentage: 0 } }
             };
             
+            // Loop through the syllabus structure to calculate progress (Subject is correctly defined here)
             Object.entries(JEE_SYLLABUS).forEach(([subject, groups]) => {
                 groups.forEach(group => {
                     group.topics.forEach(topic => {
                         const topicKey = `${subject}-${topic}`;
-                        // Get progress object for the topic
                         const progress = userProgress[topicKey] || {};
                         
                         let completedStagesForTopic = 0;
@@ -427,7 +670,6 @@
                 let barsHtml = '';
                 STAGE_KEYS.forEach(stageData => {
                     
-                    // --- FIX: Access the calculated metrics from the analysis object ---
                     const metrics = analysis.progressByStage[stageData.key]; 
                     
                     let hexColor;
@@ -441,7 +683,6 @@
                         ? 'ring-4 ring-indigo-400/50 scale-[1.01] shadow-2xl ring-offset-2' 
                         : 'hover:shadow-xl hover:scale-[1.01] transition-all duration-200 cursor-pointer';
                     
-                    // Indicator uses the dynamically calculated hex color
                     const indicator = `<span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${hexColor}"></span>`;
 
                     barsHtml += `
@@ -450,7 +691,6 @@
                                 <h3 class="text-lg font-bold text-gray-800 flex items-center">
                                     ${indicator} ${stageData.label} Completed
                                 </h3>
-                                <!-- FIX APPLIED HERE: Use metrics.percentage and metrics.count -->
                                 <span class="text-2xl font-extrabold text-indigo-600">${metrics.percentage}%</span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-3">
@@ -469,7 +709,6 @@
             // Update Subject Breakdown
             Object.keys(analysis.subjects).forEach(subject => {
                 const data = analysis.subjects[subject];
-                // Max milestones for a subject (Total Topics * 4 independent stages)
                 const totalSubMilestones = data.totalTopics * STAGE_KEYS.length; 
                 data.percentage = calculatePercentage(data.completedStages, totalSubMilestones);
                 
@@ -573,51 +812,41 @@
                             itemDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg bg-white border border-gray-100 shadow-sm';
 
                             const label = document.createElement('span');
-                            // If all 4 stages are complete, strike through the topic
                             const isFullyComplete = STAGE_KEYS.every(s => progress[s.key]);
                             label.className = `text-base font-medium text-gray-800 w-full sm:w-1/2 mr-4 ${isFullyComplete ? 'line-through text-gray-500' : ''}`;
                             label.textContent = topic;
                             itemDiv.appendChild(label);
 
-                            // Independent Stage Toggles - Now using styled checkboxes
                             const stageToggles = document.createElement('div');
                             stageToggles.className = 'flex flex-wrap justify-start sm:justify-end space-x-2 p-1 bg-gray-100 rounded-md mt-2 sm:mt-0 shadow-inner';
 
                             STAGE_KEYS.forEach(stage => {
                                 const isChecked = progress[stage.key] || false;
                                 
-                                // Wrapper for the checkbox and label
                                 const stageWrapper = document.createElement('div');
                                 stageWrapper.className = 'relative';
 
-                                // 1. Hidden Checkbox Input
                                 const checkboxId = `${topicKey}-${stage.key}-check`;
                                 const checkbox = document.createElement('input');
                                 checkbox.type = 'checkbox';
                                 checkbox.id = checkboxId;
                                 checkbox.checked = isChecked;
-                                checkbox.className = 'sr-only peer'; // Visually hide the native checkbox
-                                // Use click handler to toggle completion
+                                checkbox.className = 'sr-only peer'; 
                                 checkbox.onclick = () => toggleStageCompletion(topicKey, stage.key);
                                 
-                                // 2. Styled Label (the visible button/pill)
                                 const label = document.createElement('label');
                                 label.htmlFor = checkboxId;
                                 
-                                // Base classes for the pill/badge
                                 const baseClasses = 'px-3 py-1 text-xs font-medium rounded-full cursor-pointer transition-all duration-200 flex items-center shadow-sm whitespace-nowrap';
                                 
-                                // MODIFIED: Changed peer-checked:text-white to peer-checked:text-gray-500 and added peer-checked:line-through
                                 const checkedClasses = `peer-checked:text-gray-500 peer-checked:line-through peer-checked:${stage.colorClass.replace('stage-', 'bg-')} peer-checked:shadow-md`;
                                 const uncheckedClasses = `peer-not-checked:bg-white peer-not-checked:text-gray-600 peer-not-checked:border peer-not-checked:border-gray-300 hover:bg-gray-100`;
 
                                 label.className = `${baseClasses} ${checkedClasses} ${uncheckedClasses}`;
 
-                                // Add content (Checkbox symbol and Label text)
-                                // We need to check the local state here since this is part of the re-render logic
                                 const currentIsChecked = userProgress[topicKey]?.[stage.key] || false;
                                 label.innerHTML = `
-                                    <span class="text-sm mr-1">${currentIsChecked ? '✔️' : '☐'}</span> 
+                                    <span class="text-sm mr-1">${currentIsChecked ? '✓' : '☐'}</span> 
                                     <span>${stage.label}</span>
                                 `;
 
@@ -642,13 +871,12 @@
                 }
             });
             
-            // Handle case where filter is active but no topics match
             if (!anyTopicVisible && currentFilterKey !== null) {
                 container.innerHTML = `<div class="md:col-span-3 text-center p-12 bg-yellow-50 rounded-xl shadow-inner border-y-4 border-yellow-300">
                     <h3 class="text-2xl font-bold text-yellow-800 mb-2">No Topics Found</h3>
                     <p class="text-lg text-yellow-700">There are no topics currently marked as **${STAGE_KEYS.find(s => s.key === currentFilterKey).label}** complete.</p>
                 </div>`;
-            } else if (!anyTopicVisible && currentFilterKey === null) {
+            } else if (!anyTopicVisible && currentFilterKey === null && totalTopicsCount === 0) {
                  container.innerHTML = `<div class="md:col-span-3 text-center p-12 bg-yellow-50 rounded-xl shadow-inner border-y-4 border-yellow-300">
                     <h3 class="text-2xl font-bold text-yellow-800 mb-2">Syllabus Missing</h3>
                     <p class="text-lg text-yellow-700">The syllabus definition is empty. Please check the 'JEE_SYLLABUS' object in the code.</p>
@@ -666,13 +894,13 @@
         <!-- Header -->
         <header class="mb-8 sm:mb-10 bg-white p-4 sm:p-6 rounded-xl shadow-lg border-b-4 border-indigo-600 flex justify-between items-center">
             <div>
-                <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE Progress Tracker</h1>
-                <p class="text-base sm:text-lg text-gray-600">Mark Lecture, Practice, PYQ, and Revision independently for each topic.</p>
+                <h1 class="text-3xl sm:text-4xl font-black text-indigo-700 mb-1">JEE Independent Stage Tracker</h1>
+                <p class="text-base sm:text-lg text-gray-600">Mark **Lecture, Practice, PYQ, and Revision** independently for each topic.</p>
             </div>
             <div id="session-display" class="flex items-center p-2 bg-indigo-50 rounded-lg shadow-inner">
                 <span class="text-3xl mr-2">...</span>
                 <div class="text-left">
-                    <span class="text-xl font-bold text-gray-800">Loading Session...</span>
+                    <span class="text-xl font-bold text-gray-800">Choose Session ID...</span>
                     <p class="text-sm text-gray-500">Connecting to database...</p>
                 </div>
             </div>
@@ -683,7 +911,7 @@
             <span id="auth-status" class="font-medium">Initializing connection for automatic saving...</span>
         </div>
 
-        <!-- MAIN TRACKER UI (Visible immediately, but data loads only after session established) -->
+        <!-- MAIN TRACKER UI (Initially hidden until a Session ID is chosen) -->
         <div id="tracker-ui" class="hidden">
             
             <!-- Overall Progress Card -->
@@ -708,7 +936,6 @@
 
                 <!-- Independent Progress Bars -->
                 <div id="independent-progress-bars" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <!-- Dynamic bar content will be inserted here by JavaScript -->
                     <div class="p-4 rounded-xl shadow-lg border border-gray-100 bg-white text-center text-gray-500">Loading analysis...</div>
                 </div>
 
@@ -779,8 +1006,65 @@
         <!-- Footer -->
         <footer class="mt-12 text-center text-sm text-gray-500 border-t pt-4">
             <p>Progress is saved automatically using your unique session ID.</p>
-            <p>With ❤️ from Subhanjan</p>
         </footer>
+    </div>
+    
+    <!-- --- SESSION SETUP MODAL UI (Appears on first load or on 'Switch' click) --- -->
+    <div id="session-setup-modal" class="modal-backdrop">
+        <div class="modal-content bg-white p-8 rounded-xl shadow-2xl max-w-lg w-full text-center">
+            <h3 class="text-3xl font-black text-indigo-700 mb-4 border-b pb-2">Load or Create Your Study Session</h3>
+            <p class="text-gray-600 mb-6">Your progress is saved using a unique 6-character Session ID. Use this ID to sync your data across all your devices.</p>
+
+            <div class="flex flex-col space-y-4">
+                <div class="p-6 bg-indigo-50 rounded-xl border border-indigo-200">
+                    <h4 class="text-xl font-bold text-indigo-700 mb-3">1. Load Existing Session</h4>
+                    <input type="text" id="load-session-input" 
+                           class="w-full p-3 mb-3 border border-gray-300 rounded-lg text-center text-lg font-mono uppercase focus:ring-indigo-500 focus:border-indigo-500" 
+                           placeholder="Enter 6-character ID (e.g., A1B2C3)" maxlength="6">
+                    <button onclick="loadExistingSession()" 
+                            class="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
+                        Load Session
+                    </button>
+                </div>
+                
+                <!-- UPDATED SECTION: Added Name Input -->
+                <div class="p-6 bg-gray-50 rounded-xl border border-gray-200">
+                    <h4 class="text-xl font-bold text-gray-700 mb-3">2. Start New Session</h4>
+                    <p class="text-sm text-gray-500 mb-2">Enter a name for your session (e.g., My 2026 JEE Prep).</p>
+                    <input type="text" id="new-session-name-input" 
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg text-lg font-medium focus:ring-green-500 focus:border-green-500" 
+                           placeholder="Your Name / Session Name" maxlength="30">
+                    <button onclick="startNewSession()" 
+                            class="w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition duration-150">
+                        Create New ID & Start
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- --- NAME EDIT MODAL UI --- -->
+    <div id="name-edit-modal" class="modal-backdrop">
+        <div class="modal-content bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full">
+            <h3 class="text-2xl font-bold text-indigo-700 mb-4 border-b pb-2">Change Your Profile Name</h3>
+            
+            <p class="text-sm text-gray-600 mb-4">This name is used to identify your session. (2-30 characters)</p>
+
+            <input type="text" id="new-name-input" 
+                   class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg font-medium" 
+                   placeholder="Enter new name" maxlength="30">
+            
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeNameEditModal()" 
+                        class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition duration-150">
+                    Cancel
+                </button>
+                <button onclick="saveNewUserName()" 
+                        class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
+                    Save Name
+                </button>
+            </div>
+        </div>
     </div>
 </body>
 </html>
