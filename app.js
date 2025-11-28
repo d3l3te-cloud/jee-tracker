@@ -244,17 +244,19 @@ function renderAuthArea() {
 async function handleGoogleLogin() {
   try {
     const res = await signInWithPopup(auth, provider);
-    currentUser = res.user;
-    await ensureUserDoc(currentUser);
+    const user = res.user;
+    console.log("Google login success:", user.email, user.uid);
+    await ensureUserDoc(user);
+    currentUser = user;
     await refreshRole();
     renderAuthArea();
+    alert("Logged in as " + (user.email || "user"));
   } catch (e) {
-    console.error(e);
-    alert("Google sign-in failed: " + e.message);
+    console.error("Google login error:", e);
+    alert("Google sign-in failed: " + e.code + " - " + e.message);
   }
 }
-
-// Email login
+//Email login
 emailLoginBtn.addEventListener("click", async () => {
   const email = authEmailInput.value.trim();
   const pass = authPasswordInput.value.trim();
@@ -264,14 +266,16 @@ emailLoginBtn.addEventListener("click", async () => {
   }
   try {
     const res = await signInWithEmailAndPassword(auth, email, pass);
+    console.log("Email login success:", res.user.email, res.user.uid);
+    await ensureUserDoc(res.user);
     currentUser = res.user;
-    await ensureUserDoc(currentUser);
     await refreshRole();
     renderAuthArea();
     closeAuthModal();
   } catch (e) {
-    console.error(e);
-    authErrorEl.textContent = e.message;
+    console.error("Email login error:", e);
+    authErrorEl.textContent = e.code + " - " + e.message;
+    alert("Email login failed: " + e.code + " - " + e.message);
   }
 });
 
@@ -289,14 +293,17 @@ emailSignupBtn.addEventListener("click", async () => {
   }
   try {
     const res = await createUserWithEmailAndPassword(auth, email, pass);
+    console.log("Email signup success:", res.user.email, res.user.uid);
+    await ensureUserDoc(res.user);
     currentUser = res.user;
-    await ensureUserDoc(currentUser);
     await refreshRole();
     renderAuthArea();
     closeAuthModal();
+    alert("Account created: " + email);
   } catch (e) {
-    console.error(e);
-    authErrorEl.textContent = e.message;
+    console.error("Email signup error:", e);
+    authErrorEl.textContent = e.code + " - " + e.message;
+    alert("Signup failed: " + e.code + " - " + e.message);
   }
 });
 
@@ -1464,3 +1471,4 @@ window.addEventListener("load", async () => {
   populateAdminSelectors();
   updateOverallProgress();
 });
+
