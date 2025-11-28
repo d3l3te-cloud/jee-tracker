@@ -26,6 +26,11 @@
   <div class="topbar-right">
     <button id="annBtn" class="icon-btn" title="Announcements">🔔</button>
     <button id="themeToggle" class="icon-btn" title="Toggle theme">🌙</button>
+
+    <!-- Auth area -->
+    <div id="authArea">
+      <button id="loginBtn" class="btn-primary small">Sign in with Google</button>
+    </div>
   </div>
 </header>
 
@@ -43,6 +48,9 @@
           </p>
           <div class="hero-actions">
             <button id="startStudy" class="btn-primary small">Start Study</button>
+          </div>
+          <div id="userStatusMsg" class="muted small">
+            Not signed in. You can still browse, but progress sync & admin tools need login.
           </div>
         </div>
         <div class="hero-stat">
@@ -175,10 +183,13 @@
 
     <!-- ADMIN -->
     <section id="adminView" class="view">
-      <h2>Admin Panel (local only)</h2>
+      <h2>Admin Panel (global)</h2>
       <p class="muted small">
-        This panel updates data in this browser (using localStorage). Later you can connect this logic to Firestore.
+        Changes here are saved to Firestore and visible to all users.
       </p>
+      <div id="adminStatus" class="muted small">
+        Sign in as admin (quizzo2k25@gmail.com or hello@gmail.com) to edit.
+      </div>
 
       <div class="grid">
 
@@ -381,6 +392,7 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- IMPORTANT: app.js is a module now -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
