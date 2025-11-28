@@ -2,552 +2,385 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <title>Praxis – CBSE Board Prep</title>
+  <title>Praxis – CBSE Prep</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Simple SVG favicon -->
-  <link
-    rel="icon"
-    type="image/svg+xml"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' ry='14' fill='%230d1117'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.35em' font-size='30' fill='%23388bfd' font-family='system-ui,Segoe UI,sans-serif'%3EP%3C/text%3E%3C/svg%3E"
-  />
 
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <!-- Top navigation bar -->
-  <header class="topbar">
-    <div class="topbar-left">
-      <div class="logo">Praxis</div>
-      <nav class="topnav">
-        <button class="topnav-item active" data-view="dashboardView">Dashboard</button>
-        <button class="topnav-item" data-view="courseView">Batches</button>
-        <button class="topnav-item" data-view="analysisView">Analysis</button>
-        <button class="topnav-item" data-view="adminView">Admin</button>
-      </nav>
-    </div>
+<!-- HEADER -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button id="navToggle" class="icon-btn nav-toggle" aria-label="Toggle navigation">☰</button>
+    <div class="logo">Praxis</div>
 
-    <div class="topbar-right">
-      <button id="announcementBell" class="icon-btn" title="Announcements">
-        <span>🔔</span>
-        <span id="announcementBadge" class="badge-dot hidden"></span>
-      </button>
-
-      <button id="themeToggle" class="icon-btn" title="Toggle light/dark">
-        <span id="themeIcon">🌙</span>
-      </button>
-
-      <div id="authArea">
-        <button id="loginBtn" class="btn-primary">Sign in</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Main layout -->
-  <div class="layout">
-    <main class="content">
-      <!-- DASHBOARD VIEW -->
-      <section id="dashboardView" class="view active">
-        <div class="card hero-card">
-          <div class="hero-main">
-            <div class="hero-title">Praxis Prep</div>
-            <div class="hero-subtitle">Your ultimate CBSE board preparation hub.</div>
-            <div id="userProfileSummary" class="muted small">
-              Not signed in. Progress will not sync across devices.
-            </div>
-            <div class="hero-actions">
-              <button id="heroStartStudy" class="btn-primary small">Continue Study</button>
-              <button id="heroOpenAnalysis" class="btn-secondary small">View Analysis</button>
-              <button id="continueAsGuestBtn" class="btn-ghost small">Continue as Guest</button>
-            </div>
-          </div>
-          <div class="hero-stat">
-            <div class="hero-stat-label">Overall Completion</div>
-            <div class="hero-stat-value" id="heroOverallPct">0%</div>
-          </div>
-        </div>
-
-        <div class="dashboard-grid-two">
-          <div class="card">
-            <h2 class="card-title">Select Your Class</h2>
-            <p class="muted small">Open batches by choosing your board class.</p>
-            <div class="pathway-grid">
-              <button id="class10Btn" class="pathway-card">
-                <div class="pathway-title">Class 10</div>
-                <div class="pathway-subtitle">Secondary · CBSE</div>
-              </button>
-              <button id="class12Btn" class="pathway-card">
-                <div class="pathway-title">Class 12</div>
-                <div class="pathway-subtitle">Senior Secondary</div>
-              </button>
-            </div>
-          </div>
-
-          <div class="card">
-            <h2 class="card-title">Recent Activity</h2>
-            <div id="lastActivityBody" class="muted small">
-              No activity yet. Start any lecture.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- COURSE VIEW (batches -> subjects -> chapters) -->
-      <section id="courseView" class="view">
-        <div class="card course-controls">
-          <div class="course-control-block">
-            <div class="small muted">Class</div>
-            <div id="currentClassLabel" class="course-control-value">
-              Not selected
-            </div>
-          </div>
-          <div class="course-control-block">
-            <div class="small muted">Batch</div>
-            <select id="batchSelect" class="course-select"></select>
-          </div>
-          <div class="course-control-block">
-            <div class="small muted">Subject</div>
-            <select id="subjectSelect" class="course-select"></select>
-          </div>
-        </div>
-
-        <div class="course-layout">
-          <div class="course-left card">
-            <h2 class="card-title">Chapters</h2>
-            <div id="chapterList" class="chapter-list"></div>
-          </div>
-
-          <div class="course-right">
-            <div id="chapterHeader" class="chapter-header">
-              <div>
-                <h1 id="chapterTitle">Select a chapter</h1>
-                <p id="chapterInfo" class="muted small">
-                  Choose a chapter on the left to see lectures and material.
-                </p>
-              </div>
-              <div id="chapterProgressBadge" class="badge badge-muted">
-                0% complete
-              </div>
-            </div>
-
-            <!-- Tabs: Lectures / Notes / DPP / Solutions / Tests -->
-            <div class="tabs">
-              <button class="tab active" data-tab="lecturesTab">Lectures</button>
-              <button class="tab" data-tab="notesTab">Notes</button>
-              <button class="tab" data-tab="dppTab">DPP</button>
-              <button class="tab" data-tab="solutionsTab">Solutions</button>
-              <button class="tab" data-tab="testsTab">Tests</button>
-            </div>
-
-            <!-- TAB CONTENT: Lectures -->
-            <div id="lecturesTab" class="tab-panel active">
-              <div class="card">
-                <div class="tab-header-row">
-                  <div>
-                    <h2 class="card-title">Lectures</h2>
-                    <p class="muted small">
-                      Click a lecture to open the full-screen video player.
-                    </p>
-                  </div>
-                </div>
-                <ul id="lectureList" class="list lecture-list"></ul>
-              </div>
-            </div>
-
-            <!-- TAB CONTENT: Notes -->
-            <div id="notesTab" class="tab-panel">
-              <div class="card">
-                <h2 class="card-title">Chapter Notes (PDF)</h2>
-                <p class="muted small">
-                  Notes are stored as PDFs. Click a row to open in a new tab.
-                </p>
-                <ul id="notesList" class="list"></ul>
-              </div>
-            </div>
-
-            <!-- TAB CONTENT: DPP -->
-            <div id="dppTab" class="tab-panel">
-              <div class="card">
-                <h2 class="card-title">Daily Practice Problems (DPP)</h2>
-                <p class="muted small">
-                  Solve the DPP and track completion from the video player overlay.
-                </p>
-                <ul id="dppList" class="list"></ul>
-              </div>
-            </div>
-
-            <!-- TAB CONTENT: Solutions -->
-            <div id="solutionsTab" class="tab-panel">
-              <div class="card">
-                <h2 class="card-title">Solutions</h2>
-                <ul id="solutionsList" class="list"></ul>
-              </div>
-            </div>
-
-            <!-- TAB CONTENT: Tests -->
-            <div id="testsTab" class="tab-panel">
-              <div class="card">
-                <h2 class="card-title">Tests &amp; Solutions</h2>
-                <ul id="testsList" class="list"></ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ANALYSIS VIEW -->
-      <section id="analysisView" class="view">
-        <h1>Analysis</h1>
-        <p class="muted small">
-          Based on lectures and DPPs you have marked as completed.
-        </p>
-
-        <div id="analysisContent" class="card">
-          Sign in and complete some content to see your analysis.
-        </div>
-      </section>
-
-      <!-- ADMIN VIEW -->
-      <section id="adminView" class="view">
-        <h1>Admin Tools</h1>
-        <p class="muted small">
-          This panel currently edits data only in your browser (demo). For real
-          deployment, wire it to Firestore/Storage and secure with rules.
-        </p>
-
-        <div id="adminGuard" class="card">
-          Only admin users can see these controls.
-        </div>
-
-        <div id="adminPanels" class="grid hidden">
-          <!-- Manage batches -->
-          <div class="card">
-            <h2 class="card-title">Manage Batches (local)</h2>
-            <p class="muted small">
-              Create or delete batches. Each batch belongs to Class 10 or 12.
-            </p>
-            <label class="field">
-              <span>New Batch ID</span>
-              <input id="adminBatchId" type="text" placeholder="batch10-2026" />
-            </label>
-            <label class="field">
-              <span>Batch Name</span>
-              <input
-                id="adminBatchName"
-                type="text"
-                placeholder="Class 10 – Term 2 Booster"
-              />
-            </label>
-            <label class="field">
-              <span>Class</span>
-              <select id="adminBatchClass">
-                <option value="10">Class 10</option>
-                <option value="12">Class 12</option>
-              </select>
-            </label>
-            <button id="adminCreateBatchBtn" class="btn-primary small">
-              Create batch (local)
-            </button>
-
-            <hr class="divider-line" />
-
-            <label class="field">
-              <span>Delete Batch</span>
-              <select id="adminBatchDeleteSelect"></select>
-            </label>
-            <button id="adminDeleteBatchBtn" class="btn-secondary small">
-              Delete selected batch
-            </button>
-
-            <div id="adminBatchMsg" class="muted small"></div>
-          </div>
-
-          <!-- Manage subjects -->
-          <div class="card">
-            <h2 class="card-title">Manage Subjects (local)</h2>
-            <p class="muted small">
-              Add or remove subjects for a batch (e.g., Maths, Physics, Chemistry).
-            </p>
-            <label class="field">
-              <span>Batch</span>
-              <select id="adminSubjectBatch"></select>
-            </label>
-            <label class="field">
-              <span>New Subject ID</span>
-              <input id="adminSubjectId" type="text" placeholder="math10" />
-            </label>
-            <label class="field">
-              <span>Subject Name</span>
-              <input id="adminSubjectName" type="text" placeholder="Mathematics" />
-            </label>
-            <button id="adminCreateSubjectBtn" class="btn-primary small">
-              Create subject (local)
-            </button>
-
-            <hr class="divider-line" />
-
-            <label class="field">
-              <span>Delete Subject from Batch</span>
-              <select id="adminSubjectDeleteSelect"></select>
-            </label>
-            <button id="adminDeleteSubjectBtn" class="btn-secondary small">
-              Delete selected subject
-            </button>
-
-            <div id="adminSubjectMsg" class="muted small"></div>
-          </div>
-
-          <!-- Create chapter -->
-          <div class="card">
-            <h2 class="card-title">Create Chapter (local)</h2>
-            <p class="muted small">
-              Adds chapters into the selected batch & subject.
-            </p>
-            <label class="field">
-              <span>Batch</span>
-              <select id="adminChapterBatch"></select>
-            </label>
-            <label class="field">
-              <span>Subject</span>
-              <select id="adminChapterSubject"></select>
-            </label>
-            <label class="field">
-              <span>New Chapter ID</span>
-              <input
-                id="adminNewChapterId"
-                type="text"
-                placeholder="math10-linear-equations"
-              />
-            </label>
-            <label class="field">
-              <span>Chapter Name</span>
-              <input
-                id="adminNewChapterName"
-                type="text"
-                placeholder="Chapter 3: Linear Equations in Two Variables"
-              />
-            </label>
-            <label class="field">
-              <span>Description</span>
-              <textarea
-                id="adminNewChapterDescription"
-                rows="3"
-                placeholder="Short line about what this chapter covers."
-              ></textarea>
-            </label>
-            <button id="adminCreateChapterBtn" class="btn-primary small">
-              Create chapter (local)
-            </button>
-            <div id="adminChapterMsg" class="muted small"></div>
-          </div>
-
-          <!-- Manage lectures -->
-          <div class="card">
-            <h2 class="card-title">Manage Lectures (local)</h2>
-            <label class="field">
-              <span>Chapter</span>
-              <select id="adminLectureChapter"></select>
-            </label>
-            <label class="field">
-              <span>Lecture Title</span>
-              <input id="adminLectureTitle" type="text" />
-            </label>
-            <label class="field">
-              <span>YouTube URL or ID</span>
-              <input
-                id="adminLectureUrl"
-                type="text"
-                placeholder="https://www.youtube.com/watch?v=..."
-              />
-            </label>
-            <button id="adminAddLectureBtn" class="btn-primary small">
-              Add lecture (local)
-            </button>
-
-            <hr class="divider-line" />
-
-            <label class="field">
-              <span>Delete Lecture ID (e.g. L1)</span>
-              <input id="adminDeleteLectureId" type="text" />
-            </label>
-            <button id="adminDeleteLectureBtn" class="btn-secondary small">
-              Delete lecture from selected chapter
-            </button>
-
-            <div id="adminLectureMsg" class="muted small"></div>
-          </div>
-
-          <!-- Manage PDFs -->
-          <div class="card">
-            <h2 class="card-title">Manage PDF Resources (local)</h2>
-            <label class="field">
-              <span>Chapter</span>
-              <select id="adminPdfChapter"></select>
-            </label>
-            <label class="field">
-              <span>Type</span>
-              <select id="adminPdfType">
-                <option value="notes">Notes</option>
-                <option value="dpp">DPP</option>
-                <option value="solutions">Solution</option>
-                <option value="tests">Test</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Title</span>
-              <input id="adminPdfTitle" type="text" />
-            </label>
-            <label class="field">
-              <span>GitHub / direct PDF URL</span>
-              <input
-                id="adminPdfUrl"
-                type="text"
-                placeholder="https://raw.githubusercontent.com/...pdf"
-              />
-            </label>
-            <button id="adminAddPdfBtn" class="btn-primary small">
-              Add PDF (local link)
-            </button>
-
-            <hr class="divider-line" />
-
-            <label class="field">
-              <span>Delete PDF ID (e.g. N1, D1, S1, T1)</span>
-              <input id="adminDeletePdfId" type="text" />
-            </label>
-            <button id="adminDeletePdfBtn" class="btn-secondary small">
-              Delete PDF from selected chapter
-            </button>
-
-            <div id="adminPdfMsg" class="muted small"></div>
-          </div>
-
-          <!-- Announcements -->
-          <div class="card">
-            <h2 class="card-title">Announcements (local)</h2>
-            <p class="muted small">
-              Create quick notifications for all users. They appear under the bell icon.
-            </p>
-            <label class="field">
-              <span>Title</span>
-              <input id="adminAnnouncementTitle" type="text" placeholder="New test uploaded" />
-            </label>
-            <label class="field">
-              <span>Message</span>
-              <textarea
-                id="adminAnnouncementBody"
-                rows="3"
-                placeholder="Real Numbers DPP-02 has been uploaded. Attempt before Friday."
-              ></textarea>
-            </label>
-            <button id="adminAddAnnouncementBtn" class="btn-primary small">
-              Add announcement (local)
-            </button>
-
-            <hr class="divider-line" />
-
-            <label class="field">
-              <span>Delete Announcement</span>
-              <select id="adminAnnouncementDeleteSelect"></select>
-            </label>
-            <button id="adminDeleteAnnouncementBtn" class="btn-secondary small">
-              Delete selected announcement
-            </button>
-
-            <div id="adminAnnouncementMsg" class="muted small"></div>
-          </div>
-        </div>
-      </section>
-    </main>
+    <nav class="topnav">
+      <button class="topnav-item active" data-view="dashboardView">Dashboard</button>
+      <button class="topnav-item" data-view="courseView">Courses</button>
+      <button class="topnav-item" data-view="analysisView">Analysis</button>
+      <button class="topnav-item" data-view="adminView">Admin</button>
+    </nav>
   </div>
 
-  <!-- VIDEO PLAYER MODAL -->
-  <div id="playerModal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog player-modal-dialog">
-      <div class="modal-header">
-        <h2 id="playerTitle">Lecture</h2>
-        <button id="playerModalClose" class="icon-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="player-wrapper full">
-          <div class="player-iframe-container">
-            <iframe
-              id="lecturePlayer"
-              src=""
-              title="Praxis Lecture"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            ></iframe>
+  <div class="topbar-right">
+    <button id="annBtn" class="icon-btn" title="Announcements">🔔</button>
+    <button id="themeToggle" class="icon-btn" title="Toggle theme">🌙</button>
+  </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+  <main class="content">
+
+    <!-- DASHBOARD -->
+    <section id="dashboardView" class="view active">
+      <div class="card hero-card">
+        <div class="hero-main">
+          <h1 class="hero-title">Praxis Prep</h1>
+          <p class="hero-subtitle">
+            Study planner for CBSE Boards – structured like PW: Batches → Subjects → Chapters → Lectures & Tests.
+          </p>
+          <div class="hero-actions">
+            <button id="startStudy" class="btn-primary small">Start Study</button>
           </div>
         </div>
-        <div class="player-actions">
-          <button id="markLectureDoneBtn" class="btn-primary small" disabled>
-            Mark lecture as completed
+        <div class="hero-stat">
+          <div class="hero-stat-label">Overall Progress</div>
+          <div id="overallProgress" class="hero-stat-value">0%</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid-two">
+        <div class="card">
+          <h2 class="card-title">Choose Class</h2>
+          <p class="muted small">Open batches by choosing your class.</p>
+          <div class="pathway-grid">
+            <button class="pathway-card" data-class="10">
+              <div class="pathway-title">Class 10</div>
+              <div class="pathway-subtitle">Secondary</div>
+            </button>
+            <button class="pathway-card" data-class="12">
+              <div class="pathway-title">Class 12</div>
+              <div class="pathway-subtitle">Senior Secondary</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Recent Activity</h2>
+          <div id="recentActivity" class="muted small">
+            No activity yet. Start any lecture.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COURSES -->
+    <section id="courseView" class="view">
+      <div class="card course-controls">
+        <div class="course-control-block">
+          <div class="small muted">Class</div>
+          <div id="currentClassLabel" class="course-control-value">Not selected</div>
+        </div>
+        <div class="course-control-block">
+          <div class="small muted">Batch</div>
+          <select id="batchSelect" class="course-select"></select>
+        </div>
+        <div class="course-control-block">
+          <div class="small muted">Subject</div>
+          <select id="subjectSelect" class="course-select"></select>
+        </div>
+      </div>
+
+      <div class="course-layout">
+        <div class="course-left card">
+          <h2 class="card-title">Chapters</h2>
+          <ul id="chapterList" class="chapter-list"></ul>
+        </div>
+
+        <div class="course-right">
+          <div class="chapter-header">
+            <div>
+              <h2 id="chapterTitle">Select a chapter</h2>
+              <p id="chapterDesc" class="muted small">
+                Choose a chapter on the left to see lectures and material.
+              </p>
+            </div>
+            <div id="chapterProgress" class="badge badge-muted">
+              0% complete
+            </div>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" data-tab="lecturesTab">Lectures</button>
+            <button class="tab" data-tab="notesTab">Notes</button>
+            <button class="tab" data-tab="dppTab">DPP</button>
+            <button class="tab" data-tab="solutionsTab">Solutions</button>
+            <button class="tab" data-tab="testsTab">Tests</button>
+          </div>
+
+          <!-- Lectures -->
+          <div id="lecturesTab" class="tab-panel active">
+            <div class="card">
+              <h3 class="card-title">Lectures</h3>
+              <ul id="lectureList" class="list"></ul>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div id="notesTab" class="tab-panel">
+            <div class="card">
+              <h3 class="card-title">Notes (PDF)</h3>
+              <ul id="notesList" class="list"></ul>
+            </div>
+          </div>
+
+          <!-- DPP -->
+          <div id="dppTab" class="tab-panel">
+            <div class="card">
+              <h3 class="card-title">DPP</h3>
+              <ul id="dppList" class="list"></ul>
+            </div>
+          </div>
+
+          <!-- Solutions -->
+          <div id="solutionsTab" class="tab-panel">
+            <div class="card">
+              <h3 class="card-title">Solutions</h3>
+              <ul id="solutionsList" class="list"></ul>
+            </div>
+          </div>
+
+          <!-- Tests -->
+          <div id="testsTab" class="tab-panel">
+            <div class="card">
+              <h3 class="card-title">Tests</h3>
+              <ul id="testsList" class="list"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYSIS -->
+    <section id="analysisView" class="view">
+      <div class="card">
+        <h2 class="card-title">Analysis</h2>
+        <div id="analysisContent" class="muted small">
+          Complete some lectures to see analysis.
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN -->
+    <section id="adminView" class="view">
+      <h2>Admin Panel (local only)</h2>
+      <p class="muted small">
+        This panel updates data in this browser (using localStorage). Later you can connect this logic to Firestore.
+      </p>
+
+      <div class="grid">
+
+        <!-- Batches -->
+        <div class="card admin-card">
+          <h3>Batches</h3>
+          <label class="field">
+            <span>Class</span>
+            <select id="adminBatchClass">
+              <option value="10">Class 10</option>
+              <option value="12">Class 12</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>New Batch Name</span>
+            <input id="adminNewBatchName" placeholder="Class 10 – Board Booster" />
+          </label>
+          <button id="adminAddBatch" class="btn-primary small">Create Batch</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Batches</span>
+            <select id="adminBatchSelect"></select>
+          </label>
+          <button id="adminDeleteBatch" class="btn-secondary small">Delete Selected Batch</button>
+          <div id="adminBatchMsg" class="muted small"></div>
+        </div>
+
+        <!-- Subjects -->
+        <div class="card admin-card">
+          <h3>Subjects</h3>
+          <label class="field">
+            <span>Batch</span>
+            <select id="adminSubjectBatch"></select>
+          </label>
+          <label class="field">
+            <span>New Subject Name</span>
+            <input id="adminNewSubjectName" placeholder="Mathematics" />
+          </label>
+          <button id="adminAddSubject" class="btn-primary small">Create Subject</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Subjects</span>
+            <select id="adminSubjectSelect"></select>
+          </label>
+          <button id="adminDeleteSubject" class="btn-secondary small">Delete Selected Subject</button>
+          <div id="adminSubjectMsg" class="muted small"></div>
+        </div>
+
+        <!-- Chapters -->
+        <div class="card admin-card">
+          <h3>Chapters</h3>
+          <label class="field">
+            <span>Batch</span>
+            <select id="adminChapterBatch"></select>
+          </label>
+          <label class="field">
+            <span>Subject</span>
+            <select id="adminChapterSubject"></select>
+          </label>
+          <label class="field">
+            <span>New Chapter Name</span>
+            <input id="adminNewChapterName" placeholder="Chapter 1: Real Numbers" />
+          </label>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="adminNewChapterDesc" rows="2"></textarea>
+          </label>
+          <button id="adminAddChapter" class="btn-primary small">Create Chapter</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Chapters</span>
+            <select id="adminChapterSelect"></select>
+          </label>
+          <button id="adminDeleteChapter" class="btn-secondary small">
+            Delete Selected Chapter
           </button>
-          <span id="lectureDoneStatus" class="muted small"></span>
+          <div id="adminChapterMsg" class="muted small"></div>
         </div>
+
+        <!-- Lectures -->
+        <div class="card admin-card">
+          <h3>Lectures</h3>
+          <label class="field">
+            <span>Batch</span>
+            <select id="lecBatch"></select>
+          </label>
+          <label class="field">
+            <span>Subject</span>
+            <select id="lecSubject"></select>
+          </label>
+          <label class="field">
+            <span>Chapter</span>
+            <select id="lecChapter"></select>
+          </label>
+
+          <label class="field">
+            <span>New Lecture Title</span>
+            <input id="lecTitle" placeholder="Introduction to Real Numbers" />
+          </label>
+          <label class="field">
+            <span>YouTube URL or ID</span>
+            <input id="lecYT" placeholder="https://www.youtube.com/watch?v=..." />
+          </label>
+          <button id="addLectureBtn" class="btn-primary small">Add Lecture</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Lectures</span>
+            <select id="lecSelect"></select>
+          </label>
+          <button id="deleteLectureBtn" class="btn-secondary small">Delete Selected Lecture</button>
+          <div id="adminLectureMsg" class="muted small"></div>
+        </div>
+
+        <!-- PDF Resources -->
+        <div class="card admin-card">
+          <h3>PDF Resources</h3>
+          <label class="field">
+            <span>Batch</span>
+            <select id="resBatch"></select>
+          </label>
+          <label class="field">
+            <span>Subject</span>
+            <select id="resSubject"></select>
+          </label>
+          <label class="field">
+            <span>Chapter</span>
+            <select id="resChapter"></select>
+          </label>
+
+          <label class="field">
+            <span>Type</span>
+            <select id="resType">
+              <option value="notes">Notes</option>
+              <option value="dpp">DPP</option>
+              <option value="solutions">Solutions</option>
+              <option value="tests">Tests</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>New Resource Title</span>
+            <input id="resTitle" placeholder="Real Numbers - DPP 01" />
+          </label>
+          <label class="field">
+            <span>PDF URL (GitHub / direct)</span>
+            <input id="resUrl" placeholder="https://raw.githubusercontent.com/...pdf" />
+          </label>
+          <button id="addResBtn" class="btn-primary small">Add Resource</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Resources (current type)</span>
+            <select id="resSelect"></select>
+          </label>
+          <button id="delResBtn" class="btn-secondary small">Delete Selected Resource</button>
+          <div id="adminResMsg" class="muted small"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- VIDEO MODAL -->
+<div id="videoModal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog player-modal-dialog">
+    <div class="modal-header">
+      <h3 id="videoTitle">Lecture</h3>
+      <button id="closeVideo" class="icon-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="player-wrapper full">
+        <div class="player-iframe-container">
+          <iframe
+            id="videoFrame"
+            src=""
+            title="Lecture"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+          ></iframe>
+        </div>
+      </div>
+      <div class="player-actions">
+        <button id="markCompleteBtn" class="btn-primary small">Mark as completed</button>
+        <span id="videoStatus" class="muted small"></span>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- AUTH MODAL -->
-  <div id="authModal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h2>Sign in to Praxis</h2>
-        <button id="authModalClose" class="icon-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <button id="googleSignInBtn" class="btn-primary full">
-          Continue with Google
-        </button>
-
-        <div class="divider">
-          <span>or</span>
-        </div>
-
-        <label class="field">
-          <span>Email</span>
-          <input id="authEmail" type="email" placeholder="you@example.com" />
-        </label>
-        <label class="field">
-          <span>Password</span>
-          <input id="authPassword" type="password" placeholder="••••••••" />
-        </label>
-
-        <div class="auth-actions">
-          <button id="emailLoginBtn" class="btn-secondary small">Login</button>
-          <button id="emailSignupBtn" class="btn-secondary small">
-            Create account
-          </button>
-          <button id="guestSignInBtn" class="btn-ghost small">
-            Continue as guest
-          </button>
-        </div>
-
-        <div id="authError" class="muted small error"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ANNOUNCEMENTS MODAL -->
-  <div id="announcementModal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h2>Announcements</h2>
-        <button id="announcementModalClose" class="icon-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <div id="announcementList" class="list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Firebase + App script -->
-  <script type="module" src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
