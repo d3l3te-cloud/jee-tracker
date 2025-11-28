@@ -1,56 +1,40 @@
-// app.js (GLOBAL – Firestore-based)
-//
-// - Reads all course data from Firestore on load
-// - Admin actions write to Firestore (global)
-// - Progress still stored locally (per browser) for now
-// - Auth: Google Sign in; admin = quizzo2k25@gmail.com / hello@gmail.com
+// app.js – Praxis (global, Firebase-based)
+// Features:
+// - Firestore: batches → subjects → chapters → lectures/resources
+// - Admin CRUD (batches, subjects, chapters, lectures, PDFs, announcements)
+// - Auth: Google + Email/Password (users stored in Firestore)
+// - Admin based on Firestore users/{uid}.role === "admin"
+// - Progress stored locally (per-device) for now
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getFirestore,
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  deleteDoc,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
+  auth,
+  provider,
+  db,
+  // storage (future: if you switch to Storage uploads)
   signInWithPopup,
+  onAuthStateChanged,
   signOut,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  doc,
+  collection,
+  setDoc,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  onSnapshot,
+} from "./firebase-config.js";
 
-// ===== Firebase init =========================================
-
-const firebaseConfig = {
-  apiKey: "AIzaSyAO6lAxJ8DTqRq62E-8PIxnwBBWm-vZ-d4",
-  authDomain: "praxis-cd621.firebaseapp.com",
-  projectId: "praxis-cd621",
-  storageBucket: "praxis-cd621.firebasestorage.app",
-  messagingSenderId: "924385334052",
-  appId: "1:924385334052:web:89ff6ab687f2dd769e19b1",
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-
-// Admins by email (simple check in front-end; rules should also check)
-const ADMIN_EMAILS = ["quizzo2k25@gmail.com", "hello@gmail.com"];
-
+// ========== STATE ==========
 let currentUser = null;
 let isAdmin = false;
 
-// ===== Local state ===========================================
+let courseData = {
+  batches: [], // [{id, name, classLevel, subjects:[{id, name, chapters:[...]}]}]
+};
 
-let courseData = { batches: [] };
-
-let userProgress = loadFromStorage("praxis-progress", {
-  completedLectures: {},
-});
+let announcements = [];
+let userProgress = loadFromStorage("praxis-progress", { completedLectures: {} });
 
 let currentClassLevel = null;
 let currentBatchId = null;
@@ -58,18 +42,20 @@ let currentSubjectId = null;
 let currentChapterId = null;
 let currentPlayingLectureKey = null;
 
-// ===== Utility ===============================================
+// ========== UTIL ==========
+const qs = (s) => document.querySelector(s);
+const qsa = (s) => Array.from(document.querySelectorAll(s));
 
 function saveToStorage(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {}
+  } catch {}
 }
 function loadFromStorage(key, fallback) {
   try {
     const v = localStorage.getItem(key);
     return v ? JSON.parse(v) : fallback;
-  } catch (e) {
+  } catch {
     return fallback;
   }
 }
@@ -99,10 +85,234 @@ function getChapter(batchId, subjectId, chapterId) {
   return subj.chapters.find((c) => c.id === chapterId) || null;
 }
 
-// ===== Firestore: load course tree ===========================
+// ========== THEME ==========
+const themeToggle = qs("#themeToggle");
+const root = document.documentElement;
+(function initTheme() {
+  const saved = localStorage.getItem("praxis-theme") || "dark";
+  root.setAttribute("data-theme", saved);
+  themeToggle.textContent = saved === "dark" ? "🌙" : "☀️";
+})();
+themeToggle.addEventListener("click", () => {
+  const current = root.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  localStorage.setItem("praxis-theme", next);
+  themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
+});
+
+// ========== NAVIGATION ==========
+const views = {
+  dashboardView: qs("#dashboardView"),
+  courseView: qs("#courseView"),
+  analysisView: qs("#analysisView"),
+  adminView: qs("#adminView"),
+};
+
+qsa(".topnav-item").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const viewId = btn.dataset.view;
+    qsa(".topnav-item").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    Object.entries(views).forEach(([id, el]) =>
+      el.classList.toggle("active", id === viewId)
+    );
+  });
+});
+
+function switchView(viewId) {
+  qsa(".topnav-item").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.view === viewId)
+  );
+  Object.entries(views).forEach(([id, el]) =>
+    el.classList.toggle("active", id === viewId)
+  );
+}
+
+// Mobile nav
+const navToggle = qs("#navToggle");
+const topbarEl = qs(".topbar");
+if (navToggle && topbarEl) {
+  navToggle.addEventListener("click", () => {
+    topbarEl.classList.toggle("nav-open");
+  });
+}
+
+// ========== AUTH ==========
+
+const authArea = qs("#authArea");
+const userStatusMsg = qs("#userStatusMsg");
+const adminStatus = qs("#adminStatus");
+
+// Auth modal DOM
+const authModal = qs("#authModal");
+const closeAuthModalBtn = qs("#closeAuthModal");
+const authEmailInput = qs("#authEmail");
+const authPasswordInput = qs("#authPassword");
+const authErrorEl = qs("#authError");
+const emailLoginBtn = qs("#emailLoginBtn");
+const emailSignupBtn = qs("#emailSignupBtn");
+
+function openAuthModal() {
+  authErrorEl.textContent = "";
+  authEmailInput.value = "";
+  authPasswordInput.value = "";
+  authModal.classList.remove("hidden");
+}
+function closeAuthModal() {
+  authModal.classList.add("hidden");
+}
+closeAuthModalBtn.addEventListener("click", closeAuthModal);
+authModal.addEventListener("click", (e) => {
+  if (e.target.classList.contains("modal-backdrop")) closeAuthModal();
+});
+
+// Ensure user doc exists
+async function ensureUserDoc(user) {
+  if (!user) return;
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, { email: user.email || null, role: "user" }, { merge: true });
+  }
+}
+
+// Load user role
+async function refreshRole() {
+  if (!currentUser) {
+    isAdmin = false;
+    if (adminStatus) adminStatus.textContent = "Not signed in";
+    return;
+  }
+  try {
+    const ref = doc(db, "users", currentUser.uid);
+    const snap = await getDoc(ref);
+    isAdmin = snap.exists() && snap.data().role === "admin";
+    if (adminStatus) {
+      adminStatus.textContent = isAdmin
+        ? "Admin access granted (global changes enabled)."
+        : "Signed in but not admin. You can view, not edit.";
+    }
+  } catch (e) {
+    console.error("Error loading role:", e);
+    isAdmin = false;
+  }
+}
+
+// Render auth area in header
+function renderAuthArea() {
+  authArea.innerHTML = "";
+  if (!currentUser) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.gap = "6px";
+
+    const googleBtn = document.createElement("button");
+    googleBtn.className = "btn-primary small";
+    googleBtn.textContent = "Google";
+    googleBtn.addEventListener("click", handleGoogleLogin);
+
+    const emailBtn = document.createElement("button");
+    emailBtn.className = "btn-secondary small";
+    emailBtn.textContent = "Email";
+    emailBtn.addEventListener("click", openAuthModal);
+
+    wrap.append(googleBtn, emailBtn);
+    authArea.appendChild(wrap);
+
+    if (userStatusMsg) {
+      userStatusMsg.textContent =
+        "Not signed in. You can browse, but admin changes & synced progress need login.";
+    }
+    return;
+  }
+
+  const btn = document.createElement("button");
+  btn.className = "btn-secondary small";
+  btn.textContent = `${currentUser.email || "User"} – Sign out`;
+  btn.addEventListener("click", () => signOut(auth));
+  authArea.appendChild(btn);
+
+  if (userStatusMsg) {
+    userStatusMsg.textContent = isAdmin
+      ? `Signed in as admin: ${currentUser.email}`
+      : `Signed in as ${currentUser.email || "user"}`;
+  }
+}
+
+// Google login
+async function handleGoogleLogin() {
+  try {
+    const res = await signInWithPopup(auth, provider);
+    currentUser = res.user;
+    await ensureUserDoc(currentUser);
+    await refreshRole();
+    renderAuthArea();
+  } catch (e) {
+    console.error(e);
+    alert("Google sign-in failed: " + e.message);
+  }
+}
+
+// Email login
+emailLoginBtn.addEventListener("click", async () => {
+  const email = authEmailInput.value.trim();
+  const pass = authPasswordInput.value.trim();
+  if (!email || !pass) {
+    authErrorEl.textContent = "Enter email and password.";
+    return;
+  }
+  try {
+    const res = await signInWithEmailAndPassword(auth, email, pass);
+    currentUser = res.user;
+    await ensureUserDoc(currentUser);
+    await refreshRole();
+    renderAuthArea();
+    closeAuthModal();
+  } catch (e) {
+    console.error(e);
+    authErrorEl.textContent = e.message;
+  }
+});
+
+// Email signup
+emailSignupBtn.addEventListener("click", async () => {
+  const email = authEmailInput.value.trim();
+  const pass = authPasswordInput.value.trim();
+  if (!email || !pass) {
+    authErrorEl.textContent = "Enter email and password.";
+    return;
+  }
+  if (pass.length < 6) {
+    authErrorEl.textContent = "Password should be at least 6 characters.";
+    return;
+  }
+  try {
+    const res = await createUserWithEmailAndPassword(auth, email, pass);
+    currentUser = res.user;
+    await ensureUserDoc(currentUser);
+    await refreshRole();
+    renderAuthArea();
+    closeAuthModal();
+  } catch (e) {
+    console.error(e);
+    authErrorEl.textContent = e.message;
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  if (currentUser) {
+    await ensureUserDoc(currentUser);
+  }
+  await refreshRole();
+  renderAuthArea();
+});
+
+// ========== FIRESTORE LOADING (COURSE DATA) ==========
 
 async function loadCourseFromFirestore() {
-  courseData = { batches: [] };
+  courseData.batches = [];
 
   const batchesSnap = await getDocs(collection(db, "batches"));
   for (const batchDoc of batchesSnap.docs) {
@@ -118,7 +328,6 @@ async function loadCourseFromFirestore() {
     const subjectsSnap = await getDocs(
       collection(db, "batches", batchId, "subjects")
     );
-
     for (const subjDoc of subjectsSnap.docs) {
       const subjectId = subjDoc.id;
       const subjectData = subjDoc.data();
@@ -131,7 +340,6 @@ async function loadCourseFromFirestore() {
       const chaptersSnap = await getDocs(
         collection(db, "batches", batchId, "subjects", subjectId, "chapters")
       );
-
       for (const chDoc of chaptersSnap.docs) {
         const chapterId = chDoc.id;
         const chData = chDoc.data();
@@ -203,113 +411,63 @@ async function loadCourseFromFirestore() {
   }
 }
 
-// ===== DOM shortcuts =========================================
+// ========== ANNOUNCEMENTS ==========
+const annBtn = qs("#annBtn");
+const annModal = qs("#annModal");
+const closeAnnModalBtn = qs("#closeAnnModal");
+const annListEl = qs("#annList");
 
-const qs = (sel) => document.querySelector(sel);
-const qsa = (sel) => Array.from(document.querySelectorAll(sel));
+annBtn.addEventListener("click", () => {
+  renderAnnList();
+  annModal.classList.remove("hidden");
+});
+closeAnnModalBtn.addEventListener("click", () => {
+  annModal.classList.add("hidden");
+});
+annModal.addEventListener("click", (e) => {
+  if (e.target.classList.contains("modal-backdrop")) {
+    annModal.classList.add("hidden");
+  }
+});
 
-const views = {
-  dashboardView: qs("#dashboardView"),
-  courseView: qs("#courseView"),
-  analysisView: qs("#analysisView"),
-  adminView: qs("#adminView"),
-};
+function renderAnnList() {
+  annListEl.innerHTML = "";
+  if (!announcements.length) {
+    annListEl.innerHTML = "<li class='muted small'>No announcements yet.</li>";
+    return;
+  }
+  announcements
+    .slice()
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .forEach((ann) => {
+      const li = document.createElement("li");
+      li.className = "list-item-row";
+      const main = document.createElement("div");
+      main.className = "list-main";
+      main.innerHTML = `
+        <div class="list-title">${ann.title}</div>
+        <div class="list-meta">${ann.body}</div>
+      `;
+      li.appendChild(main);
+      annListEl.appendChild(li);
+    });
+}
 
-qsa(".topnav-item").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const viewId = btn.dataset.view;
-    qsa(".topnav-item").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    Object.entries(views).forEach(([id, el]) =>
-      el.classList.toggle("active", id === viewId)
-    );
+// Realtime announcements
+onSnapshot(collection(db, "announcements"), (snap) => {
+  announcements = [];
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    announcements.push({
+      id: docSnap.id,
+      title: d.title,
+      body: d.body,
+      createdAt: d.createdAt || 0,
+    });
   });
 });
 
-function switchView(viewId) {
-  qsa(".topnav-item").forEach((btn) =>
-    btn.classList.toggle("active", btn.dataset.view === viewId)
-  );
-  Object.entries(views).forEach(([id, el]) =>
-    el.classList.toggle("active", id === viewId)
-  );
-}
-
-// Mobile nav
-const navToggle = qs("#navToggle");
-const topbarEl = qs(".topbar");
-if (navToggle && topbarEl) {
-  navToggle.addEventListener("click", () => {
-    topbarEl.classList.toggle("nav-open");
-  });
-}
-
-// Theme
-const themeToggle = qs("#themeToggle");
-const root = document.documentElement;
-(function initTheme() {
-  const saved = localStorage.getItem("praxis-theme") || "dark";
-  root.setAttribute("data-theme", saved);
-  themeToggle.textContent = saved === "dark" ? "🌙" : "☀️";
-})();
-themeToggle.addEventListener("click", () => {
-  const current = root.getAttribute("data-theme") || "dark";
-  const next = current === "dark" ? "light" : "dark";
-  root.setAttribute("data-theme", next);
-  localStorage.setItem("praxis-theme", next);
-  themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
-});
-
-// ===== Auth ==================================================
-
-const authArea = qs("#authArea");
-const userStatusMsg = qs("#userStatusMsg");
-const adminStatus = qs("#adminStatus");
-
-function renderAuthArea() {
-  authArea.innerHTML = "";
-  if (!currentUser) {
-    const btn = document.createElement("button");
-    btn.id = "loginBtn";
-    btn.className = "btn-primary small";
-    btn.textContent = "Sign in with Google";
-    btn.addEventListener("click", handleLogin);
-    authArea.appendChild(btn);
-    userStatusMsg.textContent =
-      "Not signed in. You can browse, but admin changes & synced progress need login.";
-    adminStatus.textContent =
-      "Sign in as admin (quizzo2k25@gmail.com or hello@gmail.com) to edit.";
-  } else {
-    const btn = document.createElement("button");
-    btn.className = "btn-secondary small";
-    btn.textContent = `${currentUser.email || "User"} – Sign out`;
-    btn.addEventListener("click", () => signOut(auth));
-    authArea.appendChild(btn);
-    userStatusMsg.textContent = isAdmin
-      ? `Signed in as admin: ${currentUser.email}`
-      : `Signed in as ${currentUser.email || "user"}`;
-    adminStatus.textContent = isAdmin
-      ? "You are admin – changes will be saved globally."
-      : "You are not admin. You can view, but not edit (writes will fail).";
-  }
-}
-
-async function handleLogin() {
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    alert("Login failed: " + e.message);
-  }
-}
-
-onAuthStateChanged(auth, (user) => {
-  currentUser = user;
-  isAdmin = !!(user && user.email && ADMIN_EMAILS.includes(user.email));
-  renderAuthArea();
-});
-
-// ===== Dashboard =============================================
-
+// ========== DASHBOARD ==========
 const overallProgressEl = qs("#overallProgress");
 const recentActivityEl = qs("#recentActivity");
 const currentClassLabelEl = qs("#currentClassLabel");
@@ -327,8 +485,7 @@ qs("#startStudy").addEventListener("click", () => {
   switchView("courseView");
 });
 
-// ===== Course view ===========================================
-
+// ========== COURSE VIEW ==========
 const batchSelect = qs("#batchSelect");
 const subjectSelect = qs("#subjectSelect");
 const chapterListEl = qs("#chapterList");
@@ -342,6 +499,7 @@ const dppListEl = qs("#dppList");
 const solutionsListEl = qs("#solutionsList");
 const testsListEl = qs("#testsList");
 
+// Tabs in course view
 const tabButtons = qsa(".tab");
 const tabPanels = qsa(".tab-panel");
 tabButtons.forEach((btn) => {
@@ -367,6 +525,7 @@ closeVideoBtn.addEventListener("click", closeVideo);
 videoModal.addEventListener("click", (e) => {
   if (e.target.classList.contains("modal-backdrop")) closeVideo();
 });
+
 function openVideoModal() {
   videoModal.classList.remove("hidden");
 }
@@ -486,7 +645,7 @@ function renderChapterContent(ch) {
     const main = document.createElement("div");
     main.className = "list-main";
     main.innerHTML = `<div class="list-title">${lec.title}</div>
-      <div class="list-meta">YouTube</div>`;
+      <div class="list-meta">YouTube Lecture</div>`;
     const status = document.createElement("div");
     status.className = "list-status";
 
@@ -546,7 +705,6 @@ function fillResourceList(container, arr, label) {
   });
 }
 
-// play lecture
 function playLecture(batchId, subjectId, chapterId, lecture) {
   const id = lecture.youtubeId || lecture.id;
   const url = buildYoutubeEmbedUrl(id);
@@ -616,8 +774,7 @@ function updateChapterProgress() {
   chapterProgressEl.textContent = `${pct}% complete`;
 }
 
-// ===== Analysis ===============================================
-
+// ========== ANALYSIS ==========
 const analysisContentEl = qs("#analysisContent");
 
 function computeStats() {
@@ -698,7 +855,7 @@ function renderAnalysisDetail() {
   analysisContentEl.appendChild(wrapper);
 }
 
-// ===== Admin panel (global – Firestore writes) ===============
+// ========== ADMIN PANEL ==========
 
 function requireAdmin() {
   if (!currentUser || !isAdmin) {
@@ -708,7 +865,7 @@ function requireAdmin() {
   return true;
 }
 
-// DOM refs
+// DOM refs for admin
 const adminBatchClass = qs("#adminBatchClass");
 const adminNewBatchName = qs("#adminNewBatchName");
 const adminAddBatchBtn = qs("#adminAddBatch");
@@ -753,7 +910,52 @@ const resSelect = qs("#resSelect");
 const delResBtn = qs("#delResBtn");
 const adminResMsg = qs("#adminResMsg");
 
-// Populate admin selects based on courseData
+// Announcement admin
+const annTitleInput = qs("#annTitle");
+const annBodyInput = qs("#annBody");
+const createAnnBtn = qs("#createAnnBtn");
+const adminAnnSelect = qs("#adminAnnSelect");
+const deleteAnnBtn = qs("#deleteAnnBtn");
+const adminAnnMsg = qs("#adminAnnMsg");
+
+// Firestore path helpers
+function batchDoc(batchId) {
+  return doc(db, "batches", batchId);
+}
+function subjectDoc(batchId, subjectId) {
+  return doc(db, "batches", batchId, "subjects", subjectId);
+}
+function chapterDoc(batchId, subjectId, chapterId) {
+  return doc(db, "batches", batchId, "subjects", subjectId, "chapters", chapterId);
+}
+function lectureDoc(batchId, subjectId, chapterId, lectureId) {
+  return doc(
+    db,
+    "batches",
+    batchId,
+    "subjects",
+    subjectId,
+    "chapters",
+    chapterId,
+    "lectures",
+    lectureId
+  );
+}
+function resourceDoc(batchId, subjectId, chapterId, resourceId) {
+  return doc(
+    db,
+    "batches",
+    batchId,
+    "subjects",
+    subjectId,
+    "chapters",
+    chapterId,
+    "resources",
+    resourceId
+  );
+}
+
+// Populate admin selectors from courseData
 function populateAdminSelectors() {
   [adminBatchSelect, adminSubjectBatch, adminChapterBatch, lecBatch, resBatch].forEach(
     (sel) => (sel.innerHTML = "")
@@ -776,6 +978,7 @@ function populateAdminSelectors() {
   populateResourceDropdowns();
 }
 
+// Subjects selects (admin + lecture/res)
 function populateAdminSubjectSelects() {
   adminSubjectSelect.innerHTML = "";
   adminChapterSubject.innerHTML = "";
@@ -783,7 +986,8 @@ function populateAdminSubjectSelects() {
   resSubject.innerHTML = "";
 
   const batchId =
-    adminSubjectBatch.value || (courseData.batches[0] && courseData.batches[0].id);
+    adminSubjectBatch.value ||
+    (courseData.batches[0] && courseData.batches[0].id);
   if (!batchId) return;
   const batch = getBatchById(batchId);
   if (!batch) return;
@@ -903,52 +1107,7 @@ function populateResourceDropdowns() {
 resType.addEventListener("change", populateResourceDropdowns);
 resChapter.addEventListener("change", populateResourceDropdowns);
 
-// --- Firestore paths helpers ---------------------------------
-function batchDoc(batchId) {
-  return doc(db, "batches", batchId);
-}
-function subjectDoc(batchId, subjectId) {
-  return doc(db, "batches", batchId, "subjects", subjectId);
-}
-function chapterDoc(batchId, subjectId, chapterId) {
-  return doc(
-    db,
-    "batches",
-    batchId,
-    "subjects",
-    subjectId,
-    "chapters",
-    chapterId
-  );
-}
-function lectureDoc(batchId, subjectId, chapterId, lectureId) {
-  return doc(
-    db,
-    "batches",
-    batchId,
-    "subjects",
-    subjectId,
-    "chapters",
-    chapterId,
-    "lectures",
-    lectureId
-  );
-}
-function resourceDoc(batchId, subjectId, chapterId, resourceId) {
-  return doc(
-    db,
-    "batches",
-    batchId,
-    "subjects",
-    subjectId,
-    "chapters",
-    chapterId,
-    "resources",
-    resourceId
-  );
-}
-
-// --- Batch actions -------------------------------------------
+// Batch actions
 adminAddBatchBtn.addEventListener("click", async () => {
   if (!requireAdmin()) return;
   const level = adminBatchClass.value;
@@ -980,8 +1139,9 @@ adminDeleteBatchBtn.addEventListener("click", async () => {
     return;
   }
   try {
-    await deleteDoc(batchDoc(id)); // NOTE: subcollections not auto-deleted; clean manually in real app
-    adminBatchMsg.textContent = "Batch deleted (document only).";
+    await deleteDoc(batchDoc(id));
+    adminBatchMsg.textContent =
+      "Batch deleted. (Note: subcollections must be cleaned manually for full cleanup.)";
     await loadCourseFromFirestore();
     populateAdminSelectors();
     renderChapterList();
@@ -991,7 +1151,7 @@ adminDeleteBatchBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Subject actions -----------------------------------------
+// Subject actions
 adminAddSubjectBtn.addEventListener("click", async () => {
   if (!requireAdmin()) return;
   const batchId = adminSubjectBatch.value;
@@ -1027,7 +1187,7 @@ adminDeleteSubjectBtn.addEventListener("click", async () => {
   try {
     await deleteDoc(subjectDoc(batchId, subjId));
     adminSubjectMsg.textContent =
-      "Subject deleted (document only, subcollections not auto-deleted).";
+      "Subject deleted. (Note: subcollections not auto-deleted.)";
     await loadCourseFromFirestore();
     populateAdminSelectors();
     if (currentBatchId === batchId) {
@@ -1040,7 +1200,7 @@ adminDeleteSubjectBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Chapter actions -----------------------------------------
+// Chapter actions
 adminAddChapterBtn.addEventListener("click", async () => {
   if (!requireAdmin()) return;
   const batchId = adminChapterBatch.value;
@@ -1083,7 +1243,7 @@ adminDeleteChapterBtn.addEventListener("click", async () => {
   try {
     await deleteDoc(chapterDoc(batchId, subjId, chapterId));
     adminChapterMsg.textContent =
-      "Chapter deleted (document only, subcollections not auto-deleted).";
+      "Chapter deleted. (Note: subcollections not auto-deleted.)";
     await loadCourseFromFirestore();
     populateAdminSelectors();
     if (currentBatchId === batchId && currentSubjectId === subjId) {
@@ -1095,7 +1255,7 @@ adminDeleteChapterBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Lecture actions -----------------------------------------
+// Lecture actions
 addLectureBtn.addEventListener("click", async () => {
   if (!requireAdmin()) return;
   const batchId = lecBatch.value;
@@ -1161,7 +1321,7 @@ deleteLectureBtn.addEventListener("click", async () => {
   }
 });
 
-// --- Resource actions ----------------------------------------
+// Resource actions (PDFs)
 addResBtn.addEventListener("click", async () => {
   if (!requireAdmin()) return;
   const batchId = resBatch.value;
@@ -1204,7 +1364,6 @@ delResBtn.addEventListener("click", async () => {
   const batchId = resBatch.value;
   const subjId = resSubject.value;
   const chapterId = resChapter.value;
-  const type = resType.value;
   const resId = resSelect.value;
   if (!batchId || !subjId || !chapterId || !resId) {
     adminResMsg.textContent = "Select resource.";
@@ -1228,8 +1387,74 @@ delResBtn.addEventListener("click", async () => {
   }
 });
 
-// ===== Init ==================================================
+// Announcements (admin)
+createAnnBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
+  const title = annTitleInput.value.trim();
+  const body = annBodyInput.value.trim();
+  if (!title || !body) {
+    adminAnnMsg.textContent = "Fill title and message.";
+    return;
+  }
+  const id = `ann-${Date.now()}`;
+  try {
+    await setDoc(doc(db, "announcements", id), {
+      title,
+      body,
+      createdAt: Date.now(),
+    });
+    annTitleInput.value = "";
+    annBodyInput.value = "";
+    adminAnnMsg.textContent = "Announcement created (global).";
+  } catch (e) {
+    adminAnnMsg.textContent = "Error: " + e.message;
+  }
+});
 
+deleteAnnBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
+  const id = adminAnnSelect.value;
+  if (!id) {
+    adminAnnMsg.textContent = "Select an announcement.";
+    return;
+  }
+  try {
+    await deleteDoc(doc(db, "announcements", id));
+    adminAnnMsg.textContent = "Announcement deleted.";
+  } catch (e) {
+    adminAnnMsg.textContent = "Error: " + e.message;
+  }
+});
+
+// Keep admin announcements dropdown in sync
+function populateAdminAnnouncements() {
+  if (!adminAnnSelect) return;
+  adminAnnSelect.innerHTML = "";
+  announcements
+    .slice()
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .forEach((ann) => {
+      const opt = document.createElement("option");
+      opt.value = ann.id;
+      opt.textContent = ann.title;
+      adminAnnSelect.appendChild(opt);
+    });
+}
+onSnapshot(collection(db, "announcements"), (snap) => {
+  announcements = [];
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    announcements.push({
+      id: docSnap.id,
+      title: d.title,
+      body: d.body,
+      createdAt: d.createdAt || 0,
+    });
+  });
+  populateAdminAnnouncements();
+});
+
+// ========== INIT ==========
 window.addEventListener("load", async () => {
   try {
     await loadCourseFromFirestore();
