@@ -2,14 +2,17 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
-  <title>Praxis – CBSE Prep</title>
+  <title>Praxis – CBSE Boards Prep</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Optional favicon (add your own file) -->
+  <link rel="icon" href="/favicon.ico" />
 
   <link rel="stylesheet" href="styles.css" />
 </head>
-
 <body>
-<!-- HEADER -->
+
+<!-- ========== TOP BAR ========== -->
 <header class="topbar">
   <div class="topbar-left">
     <button id="navToggle" class="icon-btn nav-toggle" aria-label="Toggle navigation">☰</button>
@@ -27,24 +30,21 @@
     <button id="annBtn" class="icon-btn" title="Announcements">🔔</button>
     <button id="themeToggle" class="icon-btn" title="Toggle theme">🌙</button>
 
-    <!-- Auth area -->
-    <div id="authArea">
-      <button id="loginBtn" class="btn-primary small">Sign in with Google</button>
-    </div>
+    <div id="authArea"></div>
   </div>
 </header>
 
-<!-- MAIN LAYOUT -->
+<!-- ========== MAIN LAYOUT ========== -->
 <div class="layout">
   <main class="content">
 
-    <!-- DASHBOARD -->
+    <!-- ========== DASHBOARD VIEW ========== -->
     <section id="dashboardView" class="view active">
       <div class="card hero-card">
         <div class="hero-main">
           <h1 class="hero-title">Praxis Prep</h1>
           <p class="hero-subtitle">
-            Study planner for CBSE Boards – structured like PW: Batches → Subjects → Chapters → Lectures & Tests.
+            CBSE Boards structured like PW – Batches → Subjects → Chapters → Lectures, Notes & Tests.
           </p>
           <div class="hero-actions">
             <button id="startStudy" class="btn-primary small">Start Study</button>
@@ -84,7 +84,7 @@
       </div>
     </section>
 
-    <!-- COURSES -->
+    <!-- ========== COURSES VIEW ========== -->
     <section id="courseView" class="view">
       <div class="card course-controls">
         <div class="course-control-block">
@@ -171,7 +171,7 @@
       </div>
     </section>
 
-    <!-- ANALYSIS -->
+    <!-- ========== ANALYSIS VIEW ========== -->
     <section id="analysisView" class="view">
       <div class="card">
         <h2 class="card-title">Analysis</h2>
@@ -181,18 +181,14 @@
       </div>
     </section>
 
-    <!-- ADMIN -->
+    <!-- ========== ADMIN VIEW ========== -->
     <section id="adminView" class="view">
-      <h2>Admin Panel (global)</h2>
-      <p class="muted small">
-        Changes here are saved to Firestore and visible to all users.
+      <h2>Admin Panel (Global)</h2>
+      <p id="adminStatus" class="muted small">
+        Sign in as admin to edit.
       </p>
-      <div id="adminStatus" class="muted small">
-        Sign in as admin (quizzo2k25@gmail.com or hello@gmail.com) to edit.
-      </div>
 
       <div class="grid">
-
         <!-- Batches -->
         <div class="card admin-card">
           <h3>Batches</h3>
@@ -357,13 +353,79 @@
           <div id="adminResMsg" class="muted small"></div>
         </div>
 
+        <!-- Announcements -->
+        <div class="card admin-card">
+          <h3>Announcements</h3>
+          <p class="muted small">Admins can post short messages visible to all users.</p>
+
+          <label class="field">
+            <span>Title</span>
+            <input id="annTitle" placeholder="Exam update" />
+          </label>
+          <label class="field">
+            <span>Message</span>
+            <textarea id="annBody" rows="2" placeholder="Chapter test on Sunday 5 PM."></textarea>
+          </label>
+          <button id="createAnnBtn" class="btn-primary small">Create Announcement</button>
+
+          <hr class="divider-line" />
+
+          <label class="field">
+            <span>Existing Announcements</span>
+            <select id="adminAnnSelect"></select>
+          </label>
+          <button id="deleteAnnBtn" class="btn-secondary small">Delete Selected</button>
+
+          <div id="adminAnnMsg" class="muted small"></div>
+        </div>
+
       </div>
     </section>
 
   </main>
 </div>
 
-<!-- VIDEO MODAL -->
+<!-- ========== AUTH MODAL (EMAIL) ========== -->
+<div id="authModal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Email Sign in / Signup</h3>
+      <button id="closeAuthModal" class="icon-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field">
+        <span>Email</span>
+        <input id="authEmail" type="email" placeholder="you@example.com" />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input id="authPassword" type="password" placeholder="At least 6 chars" />
+      </label>
+      <div style="margin-top:10px; display:flex; gap:10px;">
+        <button id="emailLoginBtn" class="btn-primary small">Login</button>
+        <button id="emailSignupBtn" class="btn-secondary small">Signup</button>
+      </div>
+      <p id="authError" class="muted small"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== ANNOUNCEMENTS MODAL ========== -->
+<div id="annModal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Announcements</h3>
+      <button id="closeAnnModal" class="icon-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <ul id="annList" class="list"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========== VIDEO PLAYER MODAL ========== -->
 <div id="videoModal" class="modal hidden">
   <div class="modal-backdrop"></div>
   <div class="modal-dialog player-modal-dialog">
@@ -392,7 +454,7 @@
   </div>
 </div>
 
-<!-- IMPORTANT: app.js is a module now -->
+<!-- ========== SCRIPTS ========== -->
 <script type="module" src="app.js"></script>
 </body>
 </html>
