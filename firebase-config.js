@@ -38,14 +38,26 @@ const firebaseConfig = {
   appId: "1:924385334052:web:89ff6ab687f2dd769e19b1",
 };
 
-// Init
+// Init core
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
 const storage = getStorage(app);
 
-// Export everything app.js imports
+// Google provider
+const provider = new GoogleAuthProvider();
+
+// Optional: use browser language
+if (auth && auth.languageCode !== undefined) {
+  auth.languageCode = "en";
+}
+
+// EXPOSE auth to window for debugging in console (useful)
+if (typeof window !== "undefined") {
+  window.firebaseAuth = auth;
+}
+
+// Export everything that app.js needs
 export {
   app,
   db,
@@ -66,7 +78,7 @@ export {
   getDocs,
   deleteDoc,
   onSnapshot,
-  // storage helpers (for future file uploads)
+  // storage helpers
   ref,
   uploadBytes,
   getDownloadURL,
