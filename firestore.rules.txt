@@ -2,39 +2,67 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Public read: course tree
+    // ---------- Helpers ----------
+    // Is the user logged in?
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Is the user an admin? (role stored in users/{uid}.role)
+    function isAdmin() {
+      return isSignedIn() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid))
+               .data.role == "admin";
+    }
+
+    // ---------- Users ----------
+    // Store profile + role here: users/{uid}
+    match /users/{uid} {
+      // User can read/write only **their own** user doc
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- Course Content ----------
+    // batches, subjects, chapters, lectures, resources
+    // Everyone can read; ONLY admin can write
+
+    // /batches/{batchId}
     match /batches/{batchId} {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // /batches/{batchId}/subjects/{subjectId}
     match /batches/{batchId}/subjects/{subjectId} {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId}
     match /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId} {
       allow read: if true;
       allow write: if isAdmin();
     }
-    match /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId}/{collection}/{docId} {
+
+    // Lectures + Resources inside chapters
+    // /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId}/{subcol}/{docId}
+    match /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId}/{subcol}/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Progress per user
-    match /userProgress/{userId} {
-      allow read, write: if request.auth != null &&
-                        request.auth.uid == userId;
-    }
-
-    // Announcements
-    match /announcements/{id} {
+    // ---------- Announcements ----------
+    // Visible to everyone, editable only by admin
+    match /announcements/{aid} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    function isAdmin() {
-      return request.auth != null &&
-             request.auth.token.role == "admin";
+    // ---------- (Optional) User Progress ----------
+    // If later you store per-user progress in Firestore:
+    // collection: userProgress, doc id = uid
+    match /userProgress/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
   }
 }
