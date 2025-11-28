@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Public read: course tree
+    match /batches/{batchId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /batches/{batchId}/subjects/{subjectId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /batches/{batchId}/subjects/{subjectId}/chapters/{chapterId}/{collection}/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Progress per user
+    match /userProgress/{userId} {
+      allow read, write: if request.auth != null &&
+                        request.auth.uid == userId;
+    }
+
+    // Announcements
+    match /announcements/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    function isAdmin() {
+      return request.auth != null &&
+             request.auth.token.role == "admin";
+    }
+  }
+}
