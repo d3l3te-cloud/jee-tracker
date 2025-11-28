@@ -954,8 +954,6 @@ const adminNewChapterId = qs("#adminNewChapterId");
 const adminNewChapterName = qs("#adminNewChapterName");
 const adminNewChapterDescription = qs("#adminNewChapterDescription");
 const adminCreateChapterBtn = qs("#adminCreateChapterBtn");
-const adminDeleteChapterId = qs("#adminDeleteChapterId");
-const adminDeleteChapterBtn = qs("#adminDeleteChapterBtn");
 const adminChapterMsg = qs("#adminChapterMsg");
 
 const adminLectureChapterSelect = qs("#adminLectureChapter");
@@ -1199,7 +1197,6 @@ adminDeleteSubjectBtn.addEventListener("click", () => {
 adminCreateChapterBtn.addEventListener("click", () => {
   const batchId = adminChapterBatch.value;
   const subjectId = adminChapterSubject.value;
-
   const batch = getBatchById(batchId);
   const subject = getSubject(batch, subjectId);
   if (!subject) {
@@ -1210,7 +1207,6 @@ adminCreateChapterBtn.addEventListener("click", () => {
   const id = adminNewChapterId.value.trim();
   const name = adminNewChapterName.value.trim();
   const desc = adminNewChapterDescription.value.trim();
-
   if (!id || !name) {
     adminChapterMsg.textContent = "Please fill at least ID and name.";
     return;
@@ -1238,61 +1234,9 @@ adminCreateChapterBtn.addEventListener("click", () => {
   adminNewChapterName.value = "";
   adminNewChapterDescription.value = "";
 
-  // refresh admin + main UI
   populateAdminSelectors();
   if (currentBatchId === batchId && currentSubjectId === subjectId) {
     renderChapterList();
-  }
-  renderAnalysis();
-});
-
-// Delete chapter
-adminDeleteChapterBtn.addEventListener("click", () => {
-  const batchId = adminChapterBatch.value;
-  const subjectId = adminChapterSubject.value;
-  const chapterId = adminDeleteChapterId.value.trim();
-
-  if (!chapterId) {
-    adminChapterMsg.textContent = "Enter the chapter ID to delete.";
-    return;
-  }
-
-  const batch = getBatchById(batchId);
-  const subject = getSubject(batch, subjectId);
-  if (!subject) {
-    adminChapterMsg.textContent = "Subject not found.";
-    return;
-  }
-
-  const idx = subject.chapters.findIndex((c) => c.id === chapterId);
-  if (idx === -1) {
-    adminChapterMsg.textContent = "Chapter ID not found in this subject.";
-    return;
-  }
-
-  // remove chapter
-  subject.chapters.splice(idx, 1);
-  adminChapterMsg.textContent =
-    "Chapter deleted locally. Chapter list has been updated.";
-  adminDeleteChapterId.value = "";
-
-  // refresh admin + main UI
-  populateAdminSelectors();
-  if (currentBatchId === batchId && currentSubjectId === subjectId) {
-    renderChapterList();
-    // if you just deleted the currently open chapter, clear content
-    if (currentChapterId === chapterId) {
-      currentChapterId = null;
-      chapterTitleEl.textContent = "Select a chapter";
-      chapterInfoEl.textContent =
-        "Choose a chapter on the left to see lectures and material.";
-      lectureList.innerHTML = "";
-      notesList.innerHTML = "";
-      dppList.innerHTML = "";
-      solutionsList.innerHTML = "";
-      testsList.innerHTML = "";
-      chapterProgressBadge.textContent = "0% complete";
-    }
   }
   renderAnalysis();
 });
@@ -1539,12 +1483,3 @@ adminDeleteAnnouncementBtn.addEventListener("click", () => {
 // Initial admin selector population
 populateAdminSelectors();
 renderAnnouncements();
-
-const navToggle = document.getElementById("navToggle");
-const topbarEl = document.querySelector(".topbar");
-
-if (navToggle && topbarEl) {
-  navToggle.addEventListener("click", () => {
-    topbarEl.classList.toggle("nav-open");
-  });
-}
