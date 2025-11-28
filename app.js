@@ -201,44 +201,45 @@ async function refreshRole() {
 
 // Render auth area in header
 function renderAuthArea() {
+  const navAdminBtn = document.getElementById("navAdminBtn");
+
   authArea.innerHTML = "";
+
+  // If NOT logged in → hide Admin button
   if (!currentUser) {
+    if (navAdminBtn) navAdminBtn.style.display = "none";
+
     const wrap = document.createElement("div");
     wrap.style.display = "flex";
-    wrap.style.gap = "6px";
+    wrap.style.gap = "8px";
 
     const googleBtn = document.createElement("button");
     googleBtn.className = "btn-primary small";
-    googleBtn.textContent = "Google";
+    googleBtn.textContent = "Sign in with Google";
     googleBtn.addEventListener("click", handleGoogleLogin);
 
     const emailBtn = document.createElement("button");
     emailBtn.className = "btn-secondary small";
-    emailBtn.textContent = "Email";
+    emailBtn.textContent = "Email / Password";
     emailBtn.addEventListener("click", openAuthModal);
 
     wrap.append(googleBtn, emailBtn);
     authArea.appendChild(wrap);
-
-    if (userStatusMsg) {
-      userStatusMsg.textContent =
-        "Not signed in. You can browse, but admin changes & synced progress need login.";
-    }
     return;
+  }
+
+  // LOGGED IN → show Admin button ONLY if admin
+  if (navAdminBtn) {
+    navAdminBtn.style.display = isAdmin ? "flex" : "none";
   }
 
   const btn = document.createElement("button");
   btn.className = "btn-secondary small";
-  btn.textContent = `${currentUser.email || "User"} – Sign out`;
+  btn.textContent = `${currentUser.email} — Sign out`;
   btn.addEventListener("click", () => signOut(auth));
   authArea.appendChild(btn);
-
-  if (userStatusMsg) {
-    userStatusMsg.textContent = isAdmin
-      ? `Signed in as admin: ${currentUser.email}`
-      : `Signed in as ${currentUser.email || "user"}`;
-  }
 }
+
 
 // Google login
 async function handleGoogleLogin() {
@@ -1471,4 +1472,5 @@ window.addEventListener("load", async () => {
   populateAdminSelectors();
   updateOverallProgress();
 });
+
 
