@@ -1,44 +1,10 @@
-// app.js
-// Praxis main logic
+// ===== Local data & state =====================================
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInAnonymously,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-// ============ FIREBASE CONFIG ===================
-const firebaseConfig = {
-  apiKey: "AIzaSyAO6lAxJ8DTqRq62E-8PIxnwBBWm-vZ-d4",
-  authDomain: "praxis-cd621.firebaseapp.com",
-  projectId: "praxis-cd621",
-  storageBucket: "praxis-cd621.firebasestorage.app",
-  messagingSenderId: "924385334052",
-  appId: "1:924385334052:web:89ff6ab687f2dd769e19b1",
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// ============ DEMO CONTENT DATA ==================
-
-const courseData = {
+// Initial demo data
+const defaultCourseData = {
   batches: [
     {
-      id: "batch10-2025",
+      id: "class10-main",
       name: "Class 10 – Board Booster",
       classLevel: "10",
       subjects: [
@@ -47,137 +13,92 @@ const courseData = {
           name: "Mathematics",
           chapters: [
             {
-              id: "math10-real-numbers",
+              id: "math10-real",
               name: "Chapter 1: Real Numbers",
-              description:
-                "Euclid's division lemma, fundamental theorem of arithmetic, revisiting irrational numbers and decimal expansions.",
+              description: "Euclid's division lemma, fundamental theorem of arithmetic…",
               lectures: [
                 {
                   id: "L1",
-                  title: "Introduction to Real Numbers & Theorem",
-                  youtubeId: "dQw4w9WgXcQ", // placeholder
-                  duration: "45:00",
-                  level: "Easy",
-                },
-                {
-                  id: "L2",
-                  title: "Fundamental Theorem of Arithmetic",
-                  youtubeId: "eY52Zsg-KVI", // placeholder
-                  duration: "55:00",
-                  level: "Medium",
+                  title: "Introduction to Real Numbers",
+                  youtubeId: "dQw4w9WgXcQ",
                 },
               ],
-              notes: [
-                {
-                  id: "N1",
-                  title: "Real Numbers – Short Notes",
-                  url: "https://example.com/real-numbers-notes.pdf",
-                },
-              ],
-              dpp: [
-                {
-                  id: "D1",
-                  title: "Real Numbers – DPP 01",
-                  url: "https://example.com/real-numbers-dpp1.pdf",
-                },
-              ],
-              solutions: [
-                {
-                  id: "S1",
-                  title: "Real Numbers – DPP 01 Solutions",
-                  url: "https://example.com/real-numbers-dpp1-solutions.pdf",
-                },
-              ],
-              tests: [
-                {
-                  id: "T1",
-                  title: "Real Numbers – Chapter Test",
-                  paperUrl: "https://example.com/real-numbers-test.pdf",
-                  solutionUrl:
-                    "https://example.com/real-numbers-test-solutions.pdf",
-                },
-              ],
+              notes: [],
+              dpp: [],
+              solutions: [],
+              tests: [],
             },
           ],
-        },
-        {
-          id: "sci10",
-          name: "Science (Placeholder)",
-          chapters: [],
         },
       ],
     },
     {
-      id: "batch12-placeholder",
-      name: "Class 12 – Coming Soon",
+      id: "class12-main",
+      name: "Class 12 – Placeholder Batch",
       classLevel: "12",
-      subjects: [
-        {
-          id: "math12",
-          name: "Mathematics",
-          chapters: [],
-        },
-      ],
+      subjects: [],
     },
   ],
 };
 
-// announcements stored locally for now
-let announcements = [];
-
-// Admin emails for demo
-const ADMIN_EMAILS = ["you@example.com", "hello@gmail.com"];
-
-// ============ STATE ==========================================
-let currentUser = null;
-let userProgress = {
+let courseData = loadFromStorage("praxis-course-data", defaultCourseData);
+let userProgress = loadFromStorage("praxis-progress", {
   completedLectures: {},
-  completedDpp: {},
-};
+});
 
 let currentClassLevel = null;
 let currentBatchId = null;
 let currentSubjectId = null;
 let currentChapterId = null;
-let currentLectureKey = null;
+let currentPlayingLectureKey = null;
 
-// Helper to build unique keys
+// ===== Utility ================================================
+
+function saveToStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {}
+}
+function loadFromStorage(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 function lectureKey(batchId, subjectId, chapterId, lectureId) {
   return `${batchId}|${subjectId}|${chapterId}|${lectureId}`;
 }
 
-// Helpers to find data
-function getBatchById(batchId) {
-  return courseData.batches.find((b) => b.id === batchId) || null;
+function getBatchById(id) {
+  return courseData.batches.find((b) => b.id === id) || null;
 }
-
 function getBatchesByClass(level) {
   return courseData.batches.filter((b) => b.classLevel === level);
 }
-
 function getSubject(batch, subjectId) {
   if (!batch) return null;
   if (subjectId) {
-    const found = batch.subjects.find((s) => s.id === subjectId);
-    if (found) return found;
+    const s = batch.subjects.find((x) => x.id === subjectId);
+    if (s) return s;
   }
   return batch.subjects[0] || null;
 }
-
 function getChapter(batchId, subjectId, chapterId) {
   const batch = getBatchById(batchId);
-  if (!batch) return null;
-  const subject = getSubject(batch, subjectId);
-  if (!subject) return null;
-  return subject.chapters.find((c) => c.id === chapterId) || null;
+  const subj = getSubject(batch, subjectId);
+  if (!subj) return null;
+  return subj.chapters.find((c) => c.id === chapterId) || null;
 }
 
-// ============ DOM SHORTCUTS ================================
+// ===== DOM shortcuts ==========================================
 
 const qs = (sel) => document.querySelector(sel);
 const qsa = (sel) => Array.from(document.querySelectorAll(sel));
 
-// Views
+// Views & nav
 const views = {
   dashboardView: qs("#dashboardView"),
   courseView: qs("#courseView"),
@@ -185,415 +106,155 @@ const views = {
   adminView: qs("#adminView"),
 };
 
-// Topnav buttons
 qsa(".topnav-item").forEach((btn) => {
   btn.addEventListener("click", () => {
-    const view = btn.dataset.view;
+    const viewId = btn.dataset.view;
     qsa(".topnav-item").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    Object.values(views).forEach((v) => v.classList.remove("active"));
-    views[view].classList.add("active");
-
-    if (view === "courseView" && !currentClassLevel) {
-      openClass("10");
-    }
+    Object.entries(views).forEach(([id, el]) =>
+      el.classList.toggle("active", id === viewId)
+    );
   });
 });
 
+// Mobile nav toggle
+const navToggle = qs("#navToggle");
+const topbarEl = qs(".topbar");
+if (navToggle && topbarEl) {
+  navToggle.addEventListener("click", () => {
+    topbarEl.classList.toggle("nav-open");
+  });
+}
+
+// Theme toggle
+const themeToggle = qs("#themeToggle");
+const root = document.documentElement;
+(function initTheme() {
+  const saved = localStorage.getItem("praxis-theme") || "dark";
+  root.setAttribute("data-theme", saved);
+  themeToggle.textContent = saved === "dark" ? "🌙" : "☀️";
+})();
+themeToggle.addEventListener("click", () => {
+  const current = root.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  localStorage.setItem("praxis-theme", next);
+  themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
+});
+
+// ===== Dashboard ==============================================
+
+const overallProgressEl = qs("#overallProgress");
+const recentActivityEl = qs("#recentActivity");
+const currentClassLabelEl = qs("#currentClassLabel");
+
+qsa(".pathway-card").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const level = btn.dataset.class;
+    openClass(level);
+    switchView("courseView");
+  });
+});
+
+qs("#startStudy").addEventListener("click", () => {
+  // default to class 10
+  openClass("10");
+  switchView("courseView");
+});
+
 function switchView(viewId) {
-  qsa(".topnav-item").forEach((b) =>
-    b.classList.toggle("active", b.dataset.view === viewId)
+  qsa(".topnav-item").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.view === viewId)
   );
   Object.entries(views).forEach(([id, el]) =>
     el.classList.toggle("active", id === viewId)
   );
 }
 
-// Theme toggle ================================================
-const themeToggle = qs("#themeToggle");
-const themeIcon = qs("#themeIcon");
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  themeIcon.textContent = theme === "dark" ? "🌙" : "☀️";
-}
-
-const savedTheme = localStorage.getItem("praxis-theme") || "dark";
-applyTheme(savedTheme);
-
-themeToggle.addEventListener("click", () => {
-  const newTheme =
-    document.documentElement.getAttribute("data-theme") === "dark"
-      ? "light"
-      : "dark";
-  applyTheme(newTheme);
-  localStorage.setItem("praxis-theme", newTheme);
-});
-
-// ============ AUTH UI =======================================
-
-const authArea = qs("#authArea");
-const authModal = qs("#authModal");
-const authModalClose = qs("#authModalClose");
-const googleSignInBtn = qs("#googleSignInBtn");
-const emailLoginBtn = qs("#emailLoginBtn");
-const emailSignupBtn = qs("#emailSignupBtn");
-const guestSignInBtn = qs("#guestSignInBtn");
-const continueAsGuestBtn = qs("#continueAsGuestBtn");
-const authEmail = qs("#authEmail");
-const authPassword = qs("#authPassword");
-const authError = qs("#authError");
-const userProfileSummary = qs("#userProfileSummary");
-const adminGuard = qs("#adminGuard");
-const adminPanels = qs("#adminPanels");
-const heroOverallPctEl = qs("#heroOverallPct");
-const lastActivityBody = qs("#lastActivityBody");
-
-function openAuthModal() {
-  authModal.classList.remove("hidden");
-  authError.textContent = "";
-}
-
-function closeAuthModal() {
-  authModal.classList.add("hidden");
-}
-
-authModalClose.addEventListener("click", closeAuthModal);
-authModal.addEventListener("click", (e) => {
-  if (e.target === authModal.querySelector(".modal-backdrop")) {
-    closeAuthModal();
-  }
-});
-
-function renderAuthArea() {
-  authArea.innerHTML = "";
-  if (currentUser) {
-    const avatarBtn = document.createElement("button");
-    avatarBtn.className = "btn-secondary small";
-    avatarBtn.textContent = currentUser.isAnonymous
-      ? "Guest – Sign out"
-      : `${currentUser.email || "User"} – Sign out`;
-    avatarBtn.addEventListener("click", () => signOut(auth));
-    authArea.appendChild(avatarBtn);
-  } else {
-    const btn = document.createElement("button");
-    btn.id = "loginBtn";
-    btn.className = "btn-primary";
-    btn.textContent = "Sign in";
-    btn.addEventListener("click", openAuthModal);
-    authArea.appendChild(btn);
-  }
-
-  // hide "continue as guest" on dashboard if signed in
-  if (continueAsGuestBtn) {
-    continueAsGuestBtn.style.display = currentUser ? "none" : "inline-flex";
-  }
-}
-
-// Auth handlers ----------------------------------------------
-googleSignInBtn.addEventListener("click", async () => {
-  authError.textContent = "";
-  try {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-    closeAuthModal();
-  } catch (err) {
-    authError.textContent = err.message;
-  }
-});
-
-emailSignupBtn.addEventListener("click", async () => {
-  authError.textContent = "";
-  try {
-    await createUserWithEmailAndPassword(
-      auth,
-      authEmail.value,
-      authPassword.value
-    );
-    closeAuthModal();
-  } catch (err) {
-    authError.textContent = err.message;
-  }
-});
-
-emailLoginBtn.addEventListener("click", async () => {
-  authError.textContent = "";
-  try {
-    await signInWithEmailAndPassword(auth, authEmail.value, authPassword.value);
-    closeAuthModal();
-  } catch (err) {
-    authError.textContent = err.message;
-  }
-});
-
-guestSignInBtn.addEventListener("click", async () => {
-  authError.textContent = "";
-  try {
-    await signInAnonymously(auth);
-    closeAuthModal();
-  } catch (err) {
-    authError.textContent = err.message;
-  }
-});
-
-if (continueAsGuestBtn) {
-  continueAsGuestBtn.addEventListener("click", async () => {
-    try {
-      await signInAnonymously(auth);
-    } catch (err) {
-      alert(err.message);
-    }
-  });
-}
-
-// Hero buttons
-qs("#heroStartStudy").addEventListener("click", () => {
-  openClass("10");
-  switchView("courseView");
-});
-qs("#heroOpenAnalysis").addEventListener("click", () => {
-  switchView("analysisView");
-});
-qs("#class10Btn").addEventListener("click", () => {
-  openClass("10");
-  switchView("courseView");
-});
-qs("#class12Btn").addEventListener("click", () => {
-  openClass("12");
-  switchView("courseView");
-});
-
-// ============ ANNOUNCEMENTS UI ==============================
-
-const announcementBell = qs("#announcementBell");
-const announcementBadge = qs("#announcementBadge");
-const announcementModal = qs("#announcementModal");
-const announcementModalClose = qs("#announcementModalClose");
-const announcementList = qs("#announcementList");
-
-announcementBell.addEventListener("click", () => {
-  announcementModal.classList.remove("hidden");
-  announcementBadge.classList.add("hidden");
-});
-
-announcementModalClose.addEventListener("click", () => {
-  announcementModal.classList.add("hidden");
-});
-
-announcementModal.addEventListener("click", (e) => {
-  if (e.target === announcementModal.querySelector(".modal-backdrop")) {
-    announcementModal.classList.add("hidden");
-  }
-});
-
-function renderAnnouncements() {
-  announcementList.innerHTML = "";
-  if (!announcements.length) {
-    const empty = document.createElement("div");
-    empty.className = "muted small";
-    empty.textContent = "No announcements yet.";
-    announcementList.appendChild(empty);
-    return;
-  }
-
-  announcements
-    .slice()
-    .reverse()
-    .forEach((a) => {
-      const row = document.createElement("div");
-      row.className = "list-item-row";
-      const main = document.createElement("div");
-      main.className = "list-item-main";
-      main.innerHTML = `<div class="list-item-title">${a.title}</div>
-                        <div class="list-item-meta">${a.body}</div>`;
-      row.appendChild(main);
-      announcementList.appendChild(row);
-    });
-}
-
-function pushAnnouncementNotification(a) {
-  // show red dot
-  announcementBadge.classList.remove("hidden");
-
-  // basic browser notification (works when tab is open and permission granted)
-  if ("Notification" in window) {
-    if (Notification.permission === "granted") {
-      new Notification(a.title, { body: a.body });
-    } else if (Notification.permission === "default") {
-      Notification.requestPermission().then((perm) => {
-        if (perm === "granted") {
-          new Notification(a.title, { body: a.body });
-        }
-      });
-    }
-  }
-}
-
-// ============ PROGRESS STORAGE (FIRESTORE) ==================
-
-async function loadUserProgress(uid) {
-  const ref = doc(db, "userProgress", uid);
-  const snapshot = await getDoc(ref);
-  if (snapshot.exists()) {
-    userProgress = snapshot.data();
-  } else {
-    userProgress = {};
-  }
-  if (!userProgress.completedLectures) userProgress.completedLectures = {};
-  if (!userProgress.completedDpp) userProgress.completedDpp = {};
-}
-
-async function saveUserProgress() {
-  if (!currentUser) return;
-  const ref = doc(db, "userProgress", currentUser.uid);
-  await setDoc(ref, userProgress, { merge: true });
-  renderAnalysis();
-  renderChapterProgress();
-}
-
-// ============ AUTH STATE LISTENER ===========================
-
-onAuthStateChanged(auth, async (user) => {
-  currentUser = user;
-  renderAuthArea();
-
-  if (user) {
-    await loadUserProgress(user.uid);
-    userProfileSummary.textContent = user.isAnonymous
-      ? "Guest mode: progress is saved on this device but not tied to an email."
-      : `Signed in as ${user.email}. Progress will sync across devices.`;
-
-    const isAdmin = !user.isAnonymous && ADMIN_EMAILS.includes(user.email);
-    if (isAdmin) {
-      adminGuard.textContent = `Admin: ${user.email}`;
-      adminPanels.classList.remove("hidden");
-    } else {
-      adminGuard.textContent =
-        "You are not an admin. Change ADMIN_EMAILS in app.js for your account.";
-      adminPanels.classList.add("hidden");
-    }
-  } else {
-    userProfileSummary.textContent =
-      "Not signed in. Progress is only stored temporarily.";
-    adminPanels.classList.add("hidden");
-  }
-
-  populateAdminSelectors();
-  renderAnalysis();
-  renderChapterProgress();
-});
-
-// ============ TABS ==========================================
-
-const tabButtons = qsa(".tab");
-const tabPanels = qsa(".tab-panel");
-
-tabButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const targetId = btn.dataset.tab;
-    tabButtons.forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    tabPanels.forEach((panel) =>
-      panel.classList.toggle("active", panel.id === targetId)
-    );
-  });
-});
-
-// ============ COURSE VIEW ===================================
+// ===== Course view ============================================
 
 const batchSelect = qs("#batchSelect");
 const subjectSelect = qs("#subjectSelect");
 const chapterListEl = qs("#chapterList");
-const currentClassLabel = qs("#currentClassLabel");
-
 const chapterTitleEl = qs("#chapterTitle");
-const chapterInfoEl = qs("#chapterInfo");
-const chapterProgressBadge = qs("#chapterProgressBadge");
+const chapterDescEl = qs("#chapterDesc");
+const chapterProgressEl = qs("#chapterProgress");
 
-const lectureList = qs("#lectureList");
-const notesList = qs("#notesList");
-const dppList = qs("#dppList");
-const solutionsList = qs("#solutionsList");
-const testsList = qs("#testsList");
+const lectureListEl = qs("#lectureList");
+const notesListEl = qs("#notesList");
+const dppListEl = qs("#dppList");
+const solutionsListEl = qs("#solutionsList");
+const testsListEl = qs("#testsList");
 
-// Video modal
-const playerModal = qs("#playerModal");
-const playerModalClose = qs("#playerModalClose");
-const playerTitle = qs("#playerTitle");
-const lecturePlayer = qs("#lecturePlayer");
-const markLectureDoneBtn = qs("#markLectureDoneBtn");
-const lectureDoneStatus = qs("#lectureDoneStatus");
-
-playerModalClose.addEventListener("click", closePlayerModal);
-playerModal.addEventListener("click", (e) => {
-  if (e.target === playerModal.querySelector(".modal-backdrop")) {
-    closePlayerModal();
-  }
+// Tabs
+const tabButtons = qsa(".tab");
+const tabPanels = qsa(".tab-panel");
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const tabId = btn.dataset.tab;
+    tabButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    tabPanels.forEach((panel) =>
+      panel.classList.toggle("active", panel.id === tabId)
+    );
+  });
 });
 
-function openPlayerModal() {
-  playerModal.classList.remove("hidden");
+// Video modal
+const videoModal = qs("#videoModal");
+const videoFrame = qs("#videoFrame");
+const videoTitleEl = qs("#videoTitle");
+const closeVideoBtn = qs("#closeVideo");
+const markCompleteBtn = qs("#markCompleteBtn");
+const videoStatusEl = qs("#videoStatus");
+
+closeVideoBtn.addEventListener("click", closeVideo);
+videoModal.addEventListener("click", (e) => {
+  if (e.target.classList.contains("modal-backdrop")) closeVideo();
+});
+function openVideoModal() {
+  videoModal.classList.remove("hidden");
 }
-function closePlayerModal() {
-  playerModal.classList.add("hidden");
-  lecturePlayer.src = "";
+function closeVideo() {
+  videoModal.classList.add("hidden");
+  videoFrame.src = "";
+  currentPlayingLectureKey = null;
 }
 
-// Open a class (10 / 12)
+// handle classes
 function openClass(level) {
   currentClassLevel = level;
-  currentClassLabel.textContent =
+  currentClassLabelEl.textContent =
     level === "10" ? "Class 10 (Secondary)" : "Class 12 (Senior Secondary)";
 
   const batches = getBatchesByClass(level);
   batchSelect.innerHTML = "";
   if (!batches.length) {
-    chapterListEl.innerHTML =
-      "<div class='muted small'>No batches configured yet for this class.</div>";
+    batchSelect.innerHTML = `<option>No batches</option>`;
     subjectSelect.innerHTML = "";
+    chapterListEl.innerHTML =
+      "<li class='muted small'>No batches created for this class yet.</li>";
     return;
   }
-
   batches.forEach((b) => {
     const opt = document.createElement("option");
     opt.value = b.id;
     opt.textContent = b.name;
     batchSelect.appendChild(opt);
   });
-
   currentBatchId = batches[0].id;
+
   populateSubjectSelect();
   renderChapterList();
-
-  const batch = getBatchById(currentBatchId);
-  const subject = getSubject(batch, currentSubjectId);
-  if (subject && subject.chapters.length) {
-    onChapterSelected(currentBatchId, subject.id, subject.chapters[0].id);
-  } else {
-    clearChapterContent();
-  }
 }
 
-function clearChapterContent() {
-  chapterTitleEl.textContent = "Select a chapter";
-  chapterInfoEl.textContent =
-    "Choose a chapter on the left to see lectures and material.";
-  lectureList.innerHTML = "";
-  notesList.innerHTML = "";
-  dppList.innerHTML = "";
-  solutionsList.innerHTML = "";
-  testsList.innerHTML = "";
-}
-
-// populate subjects based on batch
 function populateSubjectSelect() {
   const batch = getBatchById(currentBatchId);
   subjectSelect.innerHTML = "";
   if (!batch || !batch.subjects.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "No subjects";
-    subjectSelect.appendChild(opt);
+    subjectSelect.innerHTML = `<option>No subjects</option>`;
+    chapterListEl.innerHTML =
+      "<li class='muted small'>No subjects created for this batch yet.</li>";
     return;
   }
   batch.subjects.forEach((s) => {
@@ -609,54 +270,38 @@ batchSelect.addEventListener("change", () => {
   currentBatchId = batchSelect.value;
   populateSubjectSelect();
   renderChapterList();
-  const batch = getBatchById(currentBatchId);
-  const subject = getSubject(batch, currentSubjectId);
-  if (subject && subject.chapters.length) {
-    onChapterSelected(currentBatchId, subject.id, subject.chapters[0].id);
-  } else {
-    clearChapterContent();
-  }
 });
 
 subjectSelect.addEventListener("change", () => {
   currentSubjectId = subjectSelect.value;
   renderChapterList();
-  const batch = getBatchById(currentBatchId);
-  const subject = getSubject(batch, currentSubjectId);
-  if (subject && subject.chapters.length) {
-    onChapterSelected(currentBatchId, subject.id, subject.chapters[0].id);
-  } else {
-    clearChapterContent();
-  }
 });
 
 function renderChapterList() {
   chapterListEl.innerHTML = "";
   const batch = getBatchById(currentBatchId);
-  const subject = getSubject(batch, currentSubjectId);
-  if (!subject) {
+  const subj = getSubject(batch, currentSubjectId);
+  if (!subj) {
     chapterListEl.innerHTML =
-      "<div class='muted small'>No subject/chapters configured.</div>";
+      "<li class='muted small'>No subject selected.</li>";
     return;
   }
 
-  subject.chapters.forEach((chapter) => {
-    const div = document.createElement("div");
-    div.className = "chapter-item";
-    div.dataset.chapterId = chapter.id;
-    div.innerHTML = `<span>${chapter.name}</span>`;
-    if (chapter.id === currentChapterId) {
-      div.classList.add("active");
-    }
-    div.addEventListener("click", () =>
-      onChapterSelected(batch.id, subject.id, chapter.id)
+  subj.chapters.forEach((ch) => {
+    const li = document.createElement("li");
+    li.className = "chapter-item";
+    li.dataset.chapterId = ch.id;
+    li.textContent = ch.name;
+    if (ch.id === currentChapterId) li.classList.add("active");
+    li.addEventListener("click", () =>
+      onChapterSelected(batch.id, subj.id, ch.id)
     );
-    chapterListEl.appendChild(div);
+    chapterListEl.appendChild(li);
   });
 
-  if (!subject.chapters.length) {
+  if (!subj.chapters.length) {
     chapterListEl.innerHTML =
-      "<div class='muted small'>No chapters yet. Use Admin to add.</div>";
+      "<li class='muted small'>No chapters. Create from Admin panel.</li>";
   }
 }
 
@@ -669,555 +314,527 @@ function onChapterSelected(batchId, subjectId, chapterId) {
     el.classList.toggle("active", el.dataset.chapterId === chapterId);
   });
 
-  const chapter = getChapter(batchId, subjectId, chapterId);
-  if (!chapter) return;
+  const ch = getChapter(batchId, subjectId, chapterId);
+  if (!ch) return;
+  chapterTitleEl.textContent = ch.name;
+  chapterDescEl.textContent = ch.description || "";
 
-  chapterTitleEl.textContent = chapter.name;
-  chapterInfoEl.textContent = chapter.description || "";
-  renderChapterProgress();
+  renderChapterContent(ch);
+  updateChapterProgress();
+}
 
+function renderChapterContent(ch) {
   // Lectures
-  lectureList.innerHTML = "";
-  chapter.lectures.forEach((lec) => {
+  lectureListEl.innerHTML = "";
+  ch.lectures.forEach((lec) => {
     const li = document.createElement("li");
-    li.className = "list-item-row lecture-card";
-
-    const thumb = document.createElement("div");
-    thumb.className = "lecture-thumb";
-    const img = document.createElement("img");
-    img.src = `https://img.youtube.com/vi/${lec.youtubeId}/mqdefault.jpg`;
-    img.alt = lec.title;
-    thumb.appendChild(img);
-
+    li.className = "list-item-row";
     const main = document.createElement("div");
-    main.className = "list-item-main";
-    main.innerHTML = `
-      <div class="list-item-title">${lec.title}</div>
-      <div class="list-item-meta">${lec.duration || ""} · ${
-      lec.level || ""
-    }</div>
-    `;
-
+    main.className = "list-main";
+    main.innerHTML = `<div class="list-title">${lec.title}</div>
+      <div class="list-meta">YouTube</div>`;
     const status = document.createElement("div");
-    status.className = "list-item-status";
-    const key = lectureKey(batchId, subjectId, chapterId, lec.id);
-    status.textContent = userProgress.completedLectures?.[key]
-      ? "Completed ✓"
-      : "";
+    status.className = "list-status";
 
-    li.appendChild(thumb);
+    const key = lectureKey(currentBatchId, currentSubjectId, ch.id, lec.id);
+    if (userProgress.completedLectures[key]) {
+      status.textContent = "Completed ✓";
+    }
+
     li.appendChild(main);
     li.appendChild(status);
 
     li.addEventListener("click", () =>
-      playLecture(batchId, subjectId, chapterId, lec)
+      playLecture(currentBatchId, currentSubjectId, ch.id, lec)
     );
 
-    lectureList.appendChild(li);
+    lectureListEl.appendChild(li);
   });
 
-  // Notes, DPP, Solutions, Tests
-  populateResourceList(notesList, chapter.notes, "Notes");
-  populateResourceList(dppList, chapter.dpp, "DPP");
-  populateResourceList(solutionsList, chapter.solutions, "Solution");
-  populateTestsList(testsList, chapter.tests);
+  if (!ch.lectures.length) {
+    lectureListEl.innerHTML =
+      "<li class='muted small'>No lectures yet for this chapter.</li>";
+  }
 
-  currentLectureKey = null;
-  markLectureDoneBtn.disabled = true;
-  lectureDoneStatus.textContent = "";
+  // Resources
+  fillResourceList(notesListEl, ch.notes, "Notes PDF");
+  fillResourceList(dppListEl, ch.dpp, "DPP PDF");
+  fillResourceList(solutionsListEl, ch.solutions, "Solution PDF");
+  fillResourceList(testsListEl, ch.tests, "Test PDF");
 }
 
-function playLecture(batchId, subjectId, chapterId, lecture) {
-  playerTitle.textContent = lecture.title;
-  const url = `https://www.youtube.com/embed/${lecture.youtubeId}?rel=0`;
-  lecturePlayer.src = url;
-
-  currentLectureKey = lectureKey(batchId, subjectId, chapterId, lecture.id);
-  markLectureDoneBtn.disabled = false;
-  updateLectureStatus();
-
-  lastActivityBody.textContent = `Watching: ${lecture.title} (${chapterTitleEl.textContent})`;
-
-  openPlayerModal();
-}
-
-function updateLectureStatus() {
-  if (!currentLectureKey) {
-    lectureDoneStatus.textContent = "";
+function fillResourceList(container, arr, label) {
+  container.innerHTML = "";
+  if (!arr || !arr.length) {
+    container.innerHTML = "<li class='muted small'>None</li>";
     return;
   }
-  const done = !!userProgress.completedLectures?.[currentLectureKey];
-  lectureDoneStatus.textContent = done ? "Marked as completed ✓" : "";
+  arr.forEach((res) => {
+    const li = document.createElement("li");
+    li.className = "list-item-row";
+    const main = document.createElement("div");
+    main.className = "list-main";
+    main.innerHTML = `<div class="list-title">${res.title}</div>
+      <div class="list-meta">${label}</div>`;
+
+    const status = document.createElement("div");
+    status.className = "list-status";
+    status.textContent = "Open ↗";
+
+    li.appendChild(main);
+    li.appendChild(status);
+
+    li.addEventListener("click", () => {
+      if (res.url) window.open(res.url, "_blank");
+    });
+
+    container.appendChild(li);
+  });
 }
 
-markLectureDoneBtn.addEventListener("click", async () => {
-  if (!currentLectureKey) return;
-  if (!userProgress.completedLectures) userProgress.completedLectures = {};
-  userProgress.completedLectures[currentLectureKey] = true;
-  await saveUserProgress();
-  updateLectureStatus();
-  if (currentBatchId && currentSubjectId && currentChapterId) {
-    onChapterSelected(currentBatchId, currentSubjectId, currentChapterId);
+// play lecture
+function playLecture(batchId, subjectId, chapterId, lecture) {
+  const id = lecture.youtubeId || lecture.id;
+  const url = buildYoutubeEmbedUrl(id);
+  videoTitleEl.textContent = lecture.title;
+  videoFrame.src = url;
+  currentPlayingLectureKey = lectureKey(batchId, subjectId, chapterId, lecture.id);
+  updateVideoStatus();
+  openVideoModal();
+
+  recentActivityEl.textContent = `Watching: ${lecture.title} (${chapterTitleEl.textContent})`;
+}
+
+function buildYoutubeEmbedUrl(input) {
+  try {
+    const u = new URL(input);
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    }
+    if (u.searchParams.get("v")) {
+      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
+    }
+  } catch (e) {
+    // not URL, maybe direct ID
   }
+  return `https://www.youtube.com/embed/${input}`;
+}
+
+markCompleteBtn.addEventListener("click", () => {
+  if (!currentPlayingLectureKey) return;
+  userProgress.completedLectures[currentPlayingLectureKey] = true;
+  saveToStorage("praxis-progress", userProgress);
+  updateVideoStatus();
+  updateChapterProgress();
+  updateOverallProgress();
 });
 
-// Resource lists – entire row is clickable
-function populateResourceList(ul, items, typeLabel) {
-  ul.innerHTML = "";
-  if (!items || items.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "muted small";
-    empty.textContent = "No material added yet.";
-    ul.appendChild(empty);
+function updateVideoStatus() {
+  if (!currentPlayingLectureKey) {
+    videoStatusEl.textContent = "";
     return;
   }
-
-  items.forEach((item) => {
-    const li = document.createElement("li");
-    li.className = "list-item-row";
-    const main = document.createElement("div");
-    main.className = "list-item-main";
-    main.innerHTML = `<div class="list-item-title">${item.title}</div>
-                      <div class="list-item-meta">${typeLabel}</div>`;
-
-    const actions = document.createElement("div");
-    actions.className = "list-item-status";
-    actions.textContent = "Open PDF ↗";
-
-    li.appendChild(main);
-    li.appendChild(actions);
-    li.addEventListener("click", () => {
-      window.open(item.url, "_blank");
-    });
-
-    ul.appendChild(li);
-  });
+  const done = !!userProgress.completedLectures[currentPlayingLectureKey];
+  videoStatusEl.textContent = done ? "Marked as completed ✓" : "";
 }
 
-function populateTestsList(ul, tests) {
-  ul.innerHTML = "";
-  if (!tests || tests.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "muted small";
-    empty.textContent = "No tests added yet.";
-    ul.appendChild(empty);
+function updateChapterProgress() {
+  if (!currentChapterId) {
+    chapterProgressEl.textContent = "0% complete";
     return;
   }
-
-  tests.forEach((test) => {
-    const li = document.createElement("li");
-    li.className = "list-item-row";
-
-    const main = document.createElement("div");
-    main.className = "list-item-main";
-    main.innerHTML = `<div class="list-item-title">${test.title}</div>`;
-
-    const actions = document.createElement("div");
-    actions.className = "list-item-status";
-    actions.textContent = "Open test ↗";
-
-    li.appendChild(main);
-    li.appendChild(actions);
-    li.addEventListener("click", () => {
-      window.open(test.paperUrl, "_blank");
-    });
-
-    ul.appendChild(li);
+  const ch = getChapter(currentBatchId, currentSubjectId, currentChapterId);
+  if (!ch || !ch.lectures.length) {
+    chapterProgressEl.textContent = "No lectures";
+    return;
+  }
+  let completed = 0;
+  ch.lectures.forEach((lec) => {
+    const key = lectureKey(
+      currentBatchId,
+      currentSubjectId,
+      currentChapterId,
+      lec.id
+    );
+    if (userProgress.completedLectures[key]) completed++;
   });
+  const pct = Math.round((completed / ch.lectures.length) * 100);
+  chapterProgressEl.textContent = `${pct}% complete`;
 }
 
-// ============ ANALYSIS ======================================
+// ===== Analysis ===============================================
 
-const analysisContent = qs("#analysisContent");
+const analysisContentEl = qs("#analysisContent");
 
 function computeStats() {
-  const stats = {
-    totalLectures: 0,
-    completedLectures: 0,
-    perChapter: {},
-  };
+  let totalLect = 0;
+  let doneLect = 0;
 
-  courseData.batches.forEach((batch) => {
-    batch.subjects.forEach((subject) => {
-      subject.chapters.forEach((chapter) => {
-        const chapterKey = chapter.id;
-        const lectures = chapter.lectures || [];
-        stats.totalLectures += lectures.length;
-
-        let completed = 0;
-        lectures.forEach((lec) => {
-          const key = lectureKey(batch.id, subject.id, chapter.id, lec.id);
-          if (userProgress.completedLectures?.[key]) completed++;
-        });
-
-        stats.perChapter[chapterKey] = {
-          name: chapter.name,
-          totalLectures: lectures.length,
-          completedLectures: completed,
-        };
-        stats.completedLectures += completed;
-      });
-    });
-  });
-
-  return stats;
-}
-
-function renderChapterProgress() {
-  if (!currentChapterId) {
-    chapterProgressBadge.textContent = "0% complete";
-    return;
-  }
-  const stats = computeStats();
-  const chapterStats = stats.perChapter[currentChapterId];
-  if (!chapterStats || chapterStats.totalLectures === 0) {
-    chapterProgressBadge.textContent = "No lectures";
-    return;
-  }
-  const pct = Math.round(
-    (chapterStats.completedLectures / chapterStats.totalLectures) * 100
-  );
-  chapterProgressBadge.textContent = `${pct}% complete`;
-}
-
-function renderAnalysis() {
-  const stats = computeStats();
-
-  if (stats.totalLectures === 0) {
-    analysisContent.textContent =
-      "No lectures configured yet. Add content from the Admin panel or edit courseData in app.js.";
-    if (heroOverallPctEl) heroOverallPctEl.textContent = "0%";
-    return;
-  }
-
-  const overallPct = Math.round(
-    (stats.completedLectures / stats.totalLectures) * 100
-  );
-
-  if (heroOverallPctEl) {
-    heroOverallPctEl.textContent = `${overallPct}%`;
-  }
-
-  const container = document.createElement("div");
-  container.className = "grid";
-
-  Object.values(stats.perChapter).forEach((ch) => {
-    const pct =
-      ch.totalLectures === 0
-        ? 0
-        : Math.round((ch.completedLectures / ch.totalLectures) * 100);
-
-    const card = document.createElement("div");
-    card.className = "card small-card";
-    card.innerHTML = `
-      <div class="list-item-title">${ch.name}</div>
-      <div class="list-item-meta">
-        ${ch.completedLectures}/${ch.totalLectures} lectures · ${pct}%
-      </div>
-      <div style="margin-top:6px;height:6px;border-radius:999px;background:var(--bg-soft);overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:var(--accent);transition:width .2s;"></div>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-
-  analysisContent.innerHTML = "";
-  analysisContent.appendChild(container);
-}
-
-renderAnalysis();
-
-// ============ ADMIN LOCAL EDITING ===========================
-
-// Batch management
-const adminBatchId = qs("#adminBatchId");
-const adminBatchName = qs("#adminBatchName");
-const adminBatchClass = qs("#adminBatchClass");
-const adminCreateBatchBtn = qs("#adminCreateBatchBtn");
-const adminBatchDeleteSelect = qs("#adminBatchDeleteSelect");
-const adminDeleteBatchBtn = qs("#adminDeleteBatchBtn");
-const adminBatchMsg = qs("#adminBatchMsg");
-
-// Subject management
-const adminSubjectBatch = qs("#adminSubjectBatch");
-const adminSubjectId = qs("#adminSubjectId");
-const adminSubjectName = qs("#adminSubjectName");
-const adminCreateSubjectBtn = qs("#adminCreateSubjectBtn");
-const adminSubjectDeleteSelect = qs("#adminSubjectDeleteSelect");
-const adminDeleteSubjectBtn = qs("#adminDeleteSubjectBtn");
-const adminSubjectMsg = qs("#adminSubjectMsg");
-
-// Chapters & lectures & PDFs
-const adminChapterBatch = qs("#adminChapterBatch");
-const adminChapterSubject = qs("#adminChapterSubject");
-const adminNewChapterId = qs("#adminNewChapterId");
-const adminNewChapterName = qs("#adminNewChapterName");
-const adminNewChapterDescription = qs("#adminNewChapterDescription");
-const adminCreateChapterBtn = qs("#adminCreateChapterBtn");
-const adminChapterMsg = qs("#adminChapterMsg");
-
-const adminLectureChapterSelect = qs("#adminLectureChapter");
-const adminLectureTitle = qs("#adminLectureTitle");
-const adminLectureUrl = qs("#adminLectureUrl");
-const adminAddLectureBtn = qs("#adminAddLectureBtn");
-const adminDeleteLectureId = qs("#adminDeleteLectureId");
-const adminDeleteLectureBtn = qs("#adminDeleteLectureBtn");
-const adminLectureMsg = qs("#adminLectureMsg");
-
-const adminPdfChapterSelect = qs("#adminPdfChapter");
-const adminPdfType = qs("#adminPdfType");
-const adminPdfTitle = qs("#adminPdfTitle");
-const adminPdfUrl = qs("#adminPdfUrl");
-const adminAddPdfBtn = qs("#adminAddPdfBtn");
-const adminDeletePdfId = qs("#adminDeletePdfId");
-const adminDeletePdfBtn = qs("#adminDeletePdfBtn");
-const adminPdfMsg = qs("#adminPdfMsg");
-
-// Announcements
-const adminAnnouncementTitle = qs("#adminAnnouncementTitle");
-const adminAnnouncementBody = qs("#adminAnnouncementBody");
-const adminAddAnnouncementBtn = qs("#adminAddAnnouncementBtn");
-const adminAnnouncementDeleteSelect = qs("#adminAnnouncementDeleteSelect");
-const adminDeleteAnnouncementBtn = qs("#adminDeleteAnnouncementBtn");
-const adminAnnouncementMsg = qs("#adminAnnouncementMsg");
-
-// Flatten helpers for selects
-function getAllChaptersFlat() {
-  const list = [];
   courseData.batches.forEach((b) => {
     b.subjects.forEach((s) => {
       s.chapters.forEach((c) => {
-        list.push({ batchId: b.id, subjectId: s.id, chapter: c });
+        c.lectures.forEach((lec) => {
+          totalLect++;
+          const key = lectureKey(b.id, s.id, c.id, lec.id);
+          if (userProgress.completedLectures[key]) doneLect++;
+        });
       });
     });
   });
-  return list;
+
+  return { totalLect, doneLect };
 }
 
-// Populate Admin selects
+function updateOverallProgress() {
+  const stats = computeStats();
+  if (!stats.totalLect) {
+    overallProgressEl.textContent = "0%";
+    analysisContentEl.textContent =
+      "No lectures configured yet. Use Admin to add.";
+    return;
+  }
+  const pct = Math.round((stats.doneLect / stats.totalLect) * 100);
+  overallProgressEl.textContent = `${pct}%`;
+  renderAnalysisDetail();
+}
+
+function renderAnalysisDetail() {
+  const statsPerChapter = [];
+  courseData.batches.forEach((b) => {
+    b.subjects.forEach((s) => {
+      s.chapters.forEach((c) => {
+        let total = c.lectures.length;
+        let done = 0;
+        c.lectures.forEach((lec) => {
+          const key = lectureKey(b.id, s.id, c.id, lec.id);
+          if (userProgress.completedLectures[key]) done++;
+        });
+        statsPerChapter.push({
+          name: `${b.name} / ${s.name} / ${c.name}`,
+          total,
+          done,
+        });
+      });
+    });
+  });
+
+  if (!statsPerChapter.length) {
+    analysisContentEl.textContent =
+      "No chapters/lectures configured. Use Admin to add.";
+    return;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "grid";
+  statsPerChapter.forEach((row) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const pct = row.total ? Math.round((row.done / row.total) * 100) : 0;
+    card.innerHTML = `
+      <div class="list-title">${row.name}</div>
+      <div class="list-meta">${row.done}/${row.total} lectures • ${pct}%</div>
+      <div style="height:6px;border-radius:999px;background:var(--bg-soft);margin-top:6px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:var(--accent);"></div>
+      </div>
+    `;
+    wrapper.appendChild(card);
+  });
+
+  analysisContentEl.innerHTML = "";
+  analysisContentEl.appendChild(wrapper);
+}
+
+// ===== Admin panel ============================================
+
+// DOM refs
+const adminBatchClass = qs("#adminBatchClass");
+const adminNewBatchName = qs("#adminNewBatchName");
+const adminAddBatchBtn = qs("#adminAddBatch");
+const adminBatchSelect = qs("#adminBatchSelect");
+const adminDeleteBatchBtn = qs("#adminDeleteBatch");
+const adminBatchMsg = qs("#adminBatchMsg");
+
+const adminSubjectBatch = qs("#adminSubjectBatch");
+const adminNewSubjectName = qs("#adminNewSubjectName");
+const adminAddSubjectBtn = qs("#adminAddSubject");
+const adminSubjectSelect = qs("#adminSubjectSelect");
+const adminDeleteSubjectBtn = qs("#adminDeleteSubject");
+const adminSubjectMsg = qs("#adminSubjectMsg");
+
+const adminChapterBatch = qs("#adminChapterBatch");
+const adminChapterSubject = qs("#adminChapterSubject");
+const adminNewChapterName = qs("#adminNewChapterName");
+const adminNewChapterDesc = qs("#adminNewChapterDesc");
+const adminAddChapterBtn = qs("#adminAddChapter");
+const adminChapterSelect = qs("#adminChapterSelect");
+const adminDeleteChapterBtn = qs("#adminDeleteChapter");
+const adminChapterMsg = qs("#adminChapterMsg");
+
+const lecBatch = qs("#lecBatch");
+const lecSubject = qs("#lecSubject");
+const lecChapter = qs("#lecChapter");
+const lecTitle = qs("#lecTitle");
+const lecYT = qs("#lecYT");
+const addLectureBtn = qs("#addLectureBtn");
+const lecSelect = qs("#lecSelect");
+const deleteLectureBtn = qs("#deleteLectureBtn");
+const adminLectureMsg = qs("#adminLectureMsg");
+
+const resBatch = qs("#resBatch");
+const resSubject = qs("#resSubject");
+const resChapter = qs("#resChapter");
+const resType = qs("#resType");
+const resTitle = qs("#resTitle");
+const resUrl = qs("#resUrl");
+const addResBtn = qs("#addResBtn");
+const resSelect = qs("#resSelect");
+const delResBtn = qs("#delResBtn");
+const adminResMsg = qs("#adminResMsg");
+
+// Populate admin selects
 function populateAdminSelectors() {
   // batches
-  adminBatchDeleteSelect.innerHTML = "";
-  adminSubjectBatch.innerHTML = "";
-  adminChapterBatch.innerHTML = "";
+  [adminBatchSelect, adminSubjectBatch, adminChapterBatch, lecBatch, resBatch].forEach(
+    (sel) => (sel.innerHTML = "")
+  );
 
   courseData.batches.forEach((b) => {
-    const label = `${b.name} (${b.classLevel})`;
-
-    const opt1 = document.createElement("option");
-    opt1.value = b.id;
-    opt1.textContent = label;
-    adminBatchDeleteSelect.appendChild(opt1);
-
-    const opt2 = opt1.cloneNode(true);
-    adminSubjectBatch.appendChild(opt2);
-
-    const opt3 = opt1.cloneNode(true);
-    adminChapterBatch.appendChild(opt3);
+    [adminBatchSelect, adminSubjectBatch, adminChapterBatch, lecBatch, resBatch].forEach(
+      (sel) => {
+        const opt = document.createElement("option");
+        opt.value = b.id;
+        opt.textContent = `${b.name} (${b.classLevel})`;
+        sel.appendChild(opt);
+      }
+    );
   });
 
-  populateAdminSubjectDeleteSelect();
-  populateAdminChapterSubjectSelect();
-  populateAdminChapterDropdowns();
-
-  // announcements delete select
-  adminAnnouncementDeleteSelect.innerHTML = "";
-  announcements.forEach((a, index) => {
-    const opt = document.createElement("option");
-    opt.value = index;
-    opt.textContent = a.title;
-    adminAnnouncementDeleteSelect.appendChild(opt);
-  });
+  populateAdminSubjectSelects();
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+  populateResourceDropdowns();
 }
 
-function populateAdminSubjectDeleteSelect() {
-  adminSubjectDeleteSelect.innerHTML = "";
-  const batchId = adminSubjectBatch.value;
-  const batch = getBatchById(batchId);
-  if (!batch) return;
-  batch.subjects.forEach((s) => {
-    const opt = document.createElement("option");
-    opt.value = `${batchId}|${s.id}`;
-    opt.textContent = `${s.name} [${s.id}]`;
-    adminSubjectDeleteSelect.appendChild(opt);
-  });
-}
-
-function populateAdminChapterSubjectSelect() {
+function populateAdminSubjectSelects() {
+  adminSubjectSelect.innerHTML = "";
   adminChapterSubject.innerHTML = "";
-  const batchId = adminChapterBatch.value;
+  lecSubject.innerHTML = "";
+  resSubject.innerHTML = "";
+
+  const batchId = adminSubjectBatch.value || (courseData.batches[0] && courseData.batches[0].id);
+  if (!batchId) return;
   const batch = getBatchById(batchId);
   if (!batch) return;
+
   batch.subjects.forEach((s) => {
+    [adminSubjectSelect, adminChapterSubject, lecSubject, resSubject].forEach(
+      (sel) => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.name;
+        sel.appendChild(opt);
+      }
+    );
+  });
+}
+
+adminSubjectBatch.addEventListener("change", () => {
+  populateAdminSubjectSelects();
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+  populateResourceDropdowns();
+});
+adminChapterBatch.addEventListener("change", () => {
+  populateAdminSubjectSelects();
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+  populateResourceDropdowns();
+});
+lecBatch.addEventListener("change", () => {
+  populateAdminSubjectSelects();
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+});
+resBatch.addEventListener("change", () => {
+  populateAdminSubjectSelects();
+  populateAdminChapterSelects();
+  populateResourceDropdowns();
+});
+
+function populateAdminChapterSelects() {
+  adminChapterSelect.innerHTML = "";
+  lecChapter.innerHTML = "";
+  resChapter.innerHTML = "";
+
+  const batchId = adminChapterBatch.value;
+  const subjectId = adminChapterSubject.value;
+  const batch = getBatchById(batchId);
+  const subj = getSubject(batch, subjectId);
+
+  if (!subj) return;
+  subj.chapters.forEach((c) => {
+    [adminChapterSelect, lecChapter, resChapter].forEach((sel) => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+adminChapterSubject.addEventListener("change", () => {
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+  populateResourceDropdowns();
+});
+lecSubject.addEventListener("change", () => {
+  populateAdminChapterSelects();
+  populateLectureDropdowns();
+});
+resSubject.addEventListener("change", () => {
+  populateAdminChapterSelects();
+  populateResourceDropdowns();
+});
+
+function populateLectureDropdowns() {
+  lecSelect.innerHTML = "";
+  const batchId = lecBatch.value;
+  const subjectId = lecSubject.value;
+  const chapterId = lecChapter.value;
+  if (!batchId || !subjectId || !chapterId) return;
+  const ch = getChapter(batchId, subjectId, chapterId);
+  if (!ch) return;
+  ch.lectures.forEach((lec) => {
     const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = s.name;
-    adminChapterSubject.appendChild(opt);
+    opt.value = lec.id;
+    opt.textContent = lec.title;
+    lecSelect.appendChild(opt);
   });
 }
 
-function populateAdminChapterDropdowns() {
-  const chapters = getAllChaptersFlat();
-  adminLectureChapterSelect.innerHTML = "";
-  adminPdfChapterSelect.innerHTML = "";
-  chapters.forEach((info) => {
-    const label = `${info.chapter.name} [${info.batchId}/${info.subjectId}]`;
-    const opt1 = document.createElement("option");
-    opt1.value = info.chapter.id;
-    opt1.textContent = label;
-    opt1.dataset.batchId = info.batchId;
-    opt1.dataset.subjectId = info.subjectId;
-    adminLectureChapterSelect.appendChild(opt1);
+lecChapter.addEventListener("change", populateLectureDropdowns);
 
-    const opt2 = opt1.cloneNode(true);
-    adminPdfChapterSelect.appendChild(opt2);
+function populateResourceDropdowns() {
+  resSelect.innerHTML = "";
+  const batchId = resBatch.value;
+  const subjectId = resSubject.value;
+  const chapterId = resChapter.value;
+  const type = resType.value;
+  if (!batchId || !subjectId || !chapterId) return;
+  const ch = getChapter(batchId, subjectId, chapterId);
+  if (!ch) return;
+  const arr =
+    type === "notes"
+      ? ch.notes
+      : type === "dpp"
+      ? ch.dpp
+      : type === "solutions"
+      ? ch.solutions
+      : ch.tests;
+  arr.forEach((r, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = r.title;
+    resSelect.appendChild(opt);
   });
 }
+resType.addEventListener("change", populateResourceDropdowns);
+resChapter.addEventListener("change", populateResourceDropdowns);
 
-// When changing batch selection in admin subject/chapter sections
-adminSubjectBatch.addEventListener("change", populateAdminSubjectDeleteSelect);
-adminChapterBatch.addEventListener("change", populateAdminChapterSubjectSelect);
-
-// Batch create/delete
-adminCreateBatchBtn.addEventListener("click", () => {
-  const id = adminBatchId.value.trim();
-  const name = adminBatchName.value.trim();
+// Batch actions
+adminAddBatchBtn.addEventListener("click", () => {
   const level = adminBatchClass.value;
-  if (!id || !name) {
-    adminBatchMsg.textContent = "Please enter both ID and name.";
+  const name = adminNewBatchName.value.trim();
+  if (!name) {
+    adminBatchMsg.textContent = "Enter batch name.";
     return;
   }
-  if (courseData.batches.some((b) => b.id === id)) {
-    adminBatchMsg.textContent = "Batch ID already exists.";
-    return;
-  }
+  const id = `${level}-${Date.now()}`;
   courseData.batches.push({
     id,
     name,
     classLevel: level,
     subjects: [],
   });
-
-  adminBatchMsg.textContent =
-    "Batch created locally. Select the class and batch in Batches view to see it.";
-  adminBatchId.value = "";
-  adminBatchName.value = "";
-
+  adminNewBatchName.value = "";
+  adminBatchMsg.textContent = "Batch created.";
+  saveToStorage("praxis-course-data", courseData);
   populateAdminSelectors();
 });
 
 adminDeleteBatchBtn.addEventListener("click", () => {
-  const id = adminBatchDeleteSelect.value;
-  if (!id) {
-    adminBatchMsg.textContent = "No batch selected.";
-    return;
-  }
-  const index = courseData.batches.findIndex((b) => b.id === id);
-  if (index === -1) {
+  const id = adminBatchSelect.value;
+  const idx = courseData.batches.findIndex((b) => b.id === id);
+  if (idx === -1) {
     adminBatchMsg.textContent = "Batch not found.";
     return;
   }
-  courseData.batches.splice(index, 1);
-  adminBatchMsg.textContent =
-    "Batch deleted locally. If it was current, please choose another batch.";
+  courseData.batches.splice(idx, 1);
+  adminBatchMsg.textContent = "Batch deleted.";
+  saveToStorage("praxis-course-data", courseData);
   populateAdminSelectors();
-  renderAnalysis();
+  renderChapterList();
 });
 
-// Subject create/delete
-adminCreateSubjectBtn.addEventListener("click", () => {
+// Subject actions
+adminAddSubjectBtn.addEventListener("click", () => {
   const batchId = adminSubjectBatch.value;
+  const name = adminNewSubjectName.value.trim();
+  if (!batchId || !name) {
+    adminSubjectMsg.textContent = "Select batch & enter subject name.";
+    return;
+  }
   const batch = getBatchById(batchId);
   if (!batch) {
     adminSubjectMsg.textContent = "Batch not found.";
     return;
   }
-
-  const id = adminSubjectId.value.trim();
-  const name = adminSubjectName.value.trim();
-  if (!id || !name) {
-    adminSubjectMsg.textContent = "Enter both subject ID and name.";
-    return;
-  }
-  if (batch.subjects.some((s) => s.id === id)) {
-    adminSubjectMsg.textContent = "Subject ID already exists in this batch.";
-    return;
-  }
-
-  batch.subjects.push({
-    id,
-    name,
-    chapters: [],
-  });
-
-  adminSubjectMsg.textContent =
-    "Subject created locally. It will appear in Batches view subject dropdown.";
-  adminSubjectId.value = "";
-  adminSubjectName.value = "";
-
+  const id = name.toLowerCase().replace(/\s+/g, "") + Date.now();
+  batch.subjects.push({ id, name, chapters: [] });
+  adminNewSubjectName.value = "";
+  adminSubjectMsg.textContent = "Subject created.";
+  saveToStorage("praxis-course-data", courseData);
   populateAdminSelectors();
-  if (currentBatchId === batchId) {
-    populateSubjectSelect();
-    renderChapterList();
-  }
 });
 
 adminDeleteSubjectBtn.addEventListener("click", () => {
-  const value = adminSubjectDeleteSelect.value; // batchId|subjectId
-  if (!value) {
-    adminSubjectMsg.textContent = "No subject selected.";
-    return;
-  }
-  const [batchId, subjectId] = value.split("|");
+  const batchId = adminSubjectBatch.value;
+  const subjId = adminSubjectSelect.value;
   const batch = getBatchById(batchId);
   if (!batch) {
     adminSubjectMsg.textContent = "Batch not found.";
     return;
   }
-  const idx = batch.subjects.findIndex((s) => s.id === subjectId);
+  const idx = batch.subjects.findIndex((s) => s.id === subjId);
   if (idx === -1) {
     adminSubjectMsg.textContent = "Subject not found.";
     return;
   }
-
   batch.subjects.splice(idx, 1);
-  adminSubjectMsg.textContent =
-    "Subject deleted locally (with all its chapters).";
+  adminSubjectMsg.textContent = "Subject deleted.";
+  saveToStorage("praxis-course-data", courseData);
   populateAdminSelectors();
-
-  if (currentBatchId === batchId) {
-    populateSubjectSelect();
-    renderChapterList();
-    clearChapterContent();
-  }
-  renderAnalysis();
+  renderChapterList();
 });
 
-// Create chapter
-adminCreateChapterBtn.addEventListener("click", () => {
+// Chapter actions
+adminAddChapterBtn.addEventListener("click", () => {
   const batchId = adminChapterBatch.value;
-  const subjectId = adminChapterSubject.value;
-  const batch = getBatchById(batchId);
-  const subject = getSubject(batch, subjectId);
-  if (!subject) {
-    adminChapterMsg.textContent = "Subject not found.";
-    return;
-  }
-
-  const id = adminNewChapterId.value.trim();
+  const subjId = adminChapterSubject.value;
   const name = adminNewChapterName.value.trim();
-  const desc = adminNewChapterDescription.value.trim();
-  if (!id || !name) {
-    adminChapterMsg.textContent = "Please fill at least ID and name.";
+  const desc = adminNewChapterDesc.value.trim();
+  const batch = getBatchById(batchId);
+  const subj = getSubject(batch, subjId);
+  if (!batch || !subj) {
+    adminChapterMsg.textContent = "Batch/subject not found.";
     return;
   }
-
-  if (subject.chapters.some((c) => c.id === id)) {
-    adminChapterMsg.textContent = "Chapter ID already exists.";
+  if (!name) {
+    adminChapterMsg.textContent = "Enter chapter name.";
     return;
   }
-
-  subject.chapters.push({
+  const id = name.toLowerCase().replace(/\s+/g, "-") + Date.now();
+  subj.chapters.push({
     id,
     name,
     description: desc,
@@ -1227,259 +844,179 @@ adminCreateChapterBtn.addEventListener("click", () => {
     solutions: [],
     tests: [],
   });
-
-  adminChapterMsg.textContent =
-    "Chapter added locally. It is now visible in chapter list.";
-  adminNewChapterId.value = "";
   adminNewChapterName.value = "";
-  adminNewChapterDescription.value = "";
-
+  adminNewChapterDesc.value = "";
+  adminChapterMsg.textContent = "Chapter created.";
+  saveToStorage("praxis-course-data", courseData);
   populateAdminSelectors();
-  if (currentBatchId === batchId && currentSubjectId === subjectId) {
-    renderChapterList();
-  }
-  renderAnalysis();
+  renderChapterList();
 });
 
-// Parse YouTube id from URL
-function extractYoutubeId(url) {
-  try {
-    const u = new URL(url);
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
-    if (u.searchParams.get("v")) return u.searchParams.get("v");
-  } catch (e) {
-    // not a valid URL or already an ID
-  }
-  return url;
-}
-
-// Add lecture
-adminAddLectureBtn.addEventListener("click", () => {
-  const sel =
-    adminLectureChapterSelect.options[adminLectureChapterSelect.selectedIndex];
-  if (!sel) {
-    adminLectureMsg.textContent = "No chapter selected.";
+adminDeleteChapterBtn.addEventListener("click", () => {
+  const batchId = adminChapterBatch.value;
+  const subjId = adminChapterSubject.value;
+  const chapterId = adminChapterSelect.value;
+  const batch = getBatchById(batchId);
+  const subj = getSubject(batch, subjId);
+  if (!subj) {
+    adminChapterMsg.textContent = "Subject not found.";
     return;
   }
-  const chapterId = sel.value;
-  const batchId = sel.dataset.batchId;
-  const subjectId = sel.dataset.subjectId;
-
-  const title = adminLectureTitle.value.trim();
-  const url = adminLectureUrl.value.trim();
-  if (!chapterId || !title || !url) {
-    adminLectureMsg.textContent = "Please fill all fields.";
-    return;
-  }
-  const youtubeId = extractYoutubeId(url);
-
-  const chapter = getChapter(batchId, subjectId, chapterId);
-  if (!chapter) {
-    adminLectureMsg.textContent = "Chapter not found.";
-    return;
-  }
-
-  const newId = `L${(chapter.lectures.length || 0) + 1}`;
-  chapter.lectures.push({
-    id: newId,
-    title,
-    youtubeId,
-    duration: "",
-    level: "",
-  });
-
-  adminLectureMsg.textContent =
-    "Lecture added locally. Reload that chapter in Batches view to see it.";
-  adminLectureTitle.value = "";
-  adminLectureUrl.value = "";
-
-  renderAnalysis();
-});
-
-// Delete lecture
-adminDeleteLectureBtn.addEventListener("click", () => {
-  const sel =
-    adminLectureChapterSelect.options[adminLectureChapterSelect.selectedIndex];
-  if (!sel) {
-    adminLectureMsg.textContent = "No chapter selected.";
-    return;
-  }
-  const chapterId = sel.value;
-  const batchId = sel.dataset.batchId;
-  const subjectId = sel.dataset.subjectId;
-  const lectureId = adminDeleteLectureId.value.trim();
-
-  if (!lectureId) {
-    adminLectureMsg.textContent = "Enter lecture ID to delete (e.g. L1).";
-    return;
-  }
-
-  const chapter = getChapter(batchId, subjectId, chapterId);
-  if (!chapter) {
-    adminLectureMsg.textContent = "Chapter not found.";
-    return;
-  }
-
-  const idx = chapter.lectures.findIndex((l) => l.id === lectureId);
+  const idx = subj.chapters.findIndex((c) => c.id === chapterId);
   if (idx === -1) {
-    adminLectureMsg.textContent = "Lecture ID not found in this chapter.";
+    adminChapterMsg.textContent = "Chapter not found.";
     return;
   }
+  subj.chapters.splice(idx, 1);
+  adminChapterMsg.textContent = "Chapter deleted.";
+  saveToStorage("praxis-course-data", courseData);
+  populateAdminSelectors();
+  renderChapterList();
+});
 
-  chapter.lectures.splice(idx, 1);
-  adminLectureMsg.textContent =
-    "Lecture deleted locally. Reload that chapter in Batches view.";
-  adminDeleteLectureId.value = "";
-
-  renderAnalysis();
+// Lecture actions
+addLectureBtn.addEventListener("click", () => {
+  const batchId = lecBatch.value;
+  const subjId = lecSubject.value;
+  const chapterId = lecChapter.value;
+  const title = lecTitle.value.trim();
+  const yt = lecYT.value.trim();
+  if (!batchId || !subjId || !chapterId || !title || !yt) {
+    adminLectureMsg.textContent = "Fill all lecture fields.";
+    return;
+  }
+  const ch = getChapter(batchId, subjId, chapterId);
+  if (!ch) {
+    adminLectureMsg.textContent = "Chapter not found.";
+    return;
+  }
+  const id = `L${Date.now()}`;
+  ch.lectures.push({
+    id,
+    title,
+    youtubeId: yt,
+  });
+  lecTitle.value = "";
+  lecYT.value = "";
+  adminLectureMsg.textContent = "Lecture added.";
+  saveToStorage("praxis-course-data", courseData);
+  populateLectureDropdowns();
   if (
     currentBatchId === batchId &&
-    currentSubjectId === subjectId &&
+    currentSubjectId === subjId &&
     currentChapterId === chapterId
   ) {
-    onChapterSelected(batchId, subjectId, chapterId);
+    renderChapterContent(ch);
   }
 });
 
-// Add PDF resource
-adminAddPdfBtn.addEventListener("click", () => {
-  const sel =
-    adminPdfChapterSelect.options[adminPdfChapterSelect.selectedIndex];
-  if (!sel) {
-    adminPdfMsg.textContent = "No chapter selected.";
+deleteLectureBtn.addEventListener("click", () => {
+  const batchId = lecBatch.value;
+  const subjId = lecSubject.value;
+  const chapterId = lecChapter.value;
+  const lectureId = lecSelect.value;
+  const ch = getChapter(batchId, subjId, chapterId);
+  if (!ch) {
+    adminLectureMsg.textContent = "Chapter not found.";
     return;
   }
-  const chapterId = sel.value;
-  const batchId = sel.dataset.batchId;
-  const subjectId = sel.dataset.subjectId;
-
-  const type = adminPdfType.value;
-  const title = adminPdfTitle.value.trim();
-  const url = adminPdfUrl.value.trim();
-  if (!chapterId || !title || !url) {
-    adminPdfMsg.textContent = "Please fill all fields.";
-    return;
-  }
-
-  const chapter = getChapter(batchId, subjectId, chapterId);
-  if (!chapter) {
-    adminPdfMsg.textContent = "Chapter not found.";
-    return;
-  }
-
-  let arrayRef;
-  if (type === "notes") arrayRef = chapter.notes || (chapter.notes = []);
-  else if (type === "dpp") arrayRef = chapter.dpp || (chapter.dpp = []);
-  else if (type === "solutions")
-    arrayRef = chapter.solutions || (chapter.solutions = []);
-  else if (type === "tests") arrayRef = chapter.tests || (chapter.tests = []);
-
-  const newIdPrefix =
-    type === "tests" ? "T" : type === "notes" ? "N" : type === "dpp" ? "D" : "S";
-  const newId = `${newIdPrefix}${(arrayRef.length || 0) + 1}`;
-
-  if (type === "tests") {
-    arrayRef.push({
-      id: newId,
-      title,
-      paperUrl: url,
-      solutionUrl: url,
-    });
-  } else {
-    arrayRef.push({
-      id: newId,
-      title,
-      url,
-    });
-  }
-
-  adminPdfMsg.textContent =
-    "PDF link added locally. Reload that chapter in Batches view to see it.";
-  adminPdfTitle.value = "";
-  adminPdfUrl.value = "";
-});
-
-// Delete PDF resource
-adminDeletePdfBtn.addEventListener("click", () => {
-  const sel =
-    adminPdfChapterSelect.options[adminPdfChapterSelect.selectedIndex];
-  if (!sel) {
-    adminPdfMsg.textContent = "No chapter selected.";
-    return;
-  }
-  const chapterId = sel.value;
-  const batchId = sel.dataset.batchId;
-  const subjectId = sel.dataset.subjectId;
-
-  const type = adminPdfType.value;
-  const resId = adminDeletePdfId.value.trim();
-  if (!resId) {
-    adminPdfMsg.textContent = "Enter PDF ID to delete (e.g. N1, D1, S1, T1).";
-    return;
-  }
-
-  const chapter = getChapter(batchId, subjectId, chapterId);
-  if (!chapter) {
-    adminPdfMsg.textContent = "Chapter not found.";
-    return;
-  }
-
-  let arrayRef;
-  if (type === "notes") arrayRef = chapter.notes;
-  else if (type === "dpp") arrayRef = chapter.dpp;
-  else if (type === "solutions") arrayRef = chapter.solutions;
-  else if (type === "tests") arrayRef = chapter.tests;
-
-  if (!arrayRef) {
-    adminPdfMsg.textContent = "No such resources in this chapter.";
-    return;
-  }
-
-  const idx = arrayRef.findIndex((r) => r.id === resId);
+  const idx = ch.lectures.findIndex((l) => l.id === lectureId);
   if (idx === -1) {
-    adminPdfMsg.textContent = "PDF ID not found in this chapter.";
+    adminLectureMsg.textContent = "Lecture not found.";
     return;
   }
-
-  arrayRef.splice(idx, 1);
-  adminPdfMsg.textContent =
-    "PDF deleted locally. Reload that chapter in Batches view.";
-  adminDeletePdfId.value = "";
+  ch.lectures.splice(idx, 1);
+  adminLectureMsg.textContent = "Lecture deleted.";
+  saveToStorage("praxis-course-data", courseData);
+  populateLectureDropdowns();
+  if (
+    currentBatchId === batchId &&
+    currentSubjectId === subjId &&
+    currentChapterId === chapterId
+  ) {
+    renderChapterContent(ch);
+  }
 });
 
-// Announcements add/delete
-adminAddAnnouncementBtn.addEventListener("click", () => {
-  const title = adminAnnouncementTitle.value.trim();
-  const body = adminAnnouncementBody.value.trim();
-  if (!title || !body) {
-    adminAnnouncementMsg.textContent = "Enter both title and message.";
+// Resource actions
+addResBtn.addEventListener("click", () => {
+  const batchId = resBatch.value;
+  const subjId = resSubject.value;
+  const chapterId = resChapter.value;
+  const type = resType.value;
+  const title = resTitle.value.trim();
+  const url = resUrl.value.trim();
+  if (!batchId || !subjId || !chapterId || !type || !title || !url) {
+    adminResMsg.textContent = "Fill all resource fields.";
     return;
   }
+  const ch = getChapter(batchId, subjId, chapterId);
+  if (!ch) {
+    adminResMsg.textContent = "Chapter not found.";
+    return;
+  }
+  const obj = { title, url };
+  if (type === "notes") ch.notes.push(obj);
+  else if (type === "dpp") ch.dpp.push(obj);
+  else if (type === "solutions") ch.solutions.push(obj);
+  else ch.tests.push(obj);
 
-  const obj = { title, body, createdAt: Date.now() };
-  announcements.push(obj);
-  adminAnnouncementMsg.textContent =
-    "Announcement added (local). It appears under the bell icon.";
-  adminAnnouncementTitle.value = "";
-  adminAnnouncementBody.value = "";
+  resTitle.value = "";
+  resUrl.value = "";
+  adminResMsg.textContent = "Resource added.";
+  saveToStorage("praxis-course-data", courseData);
+  populateResourceDropdowns();
+  if (
+    currentBatchId === batchId &&
+    currentSubjectId === subjId &&
+    currentChapterId === chapterId
+  ) {
+    const updated = getChapter(batchId, subjId, chapterId);
+    renderChapterContent(updated);
+  }
+});
 
+delResBtn.addEventListener("click", () => {
+  const batchId = resBatch.value;
+  const subjId = resSubject.value;
+  const chapterId = resChapter.value;
+  const type = resType.value;
+  const idx = parseInt(resSelect.value, 10);
+  const ch = getChapter(batchId, subjId, chapterId);
+  if (!ch) {
+    adminResMsg.textContent = "Chapter not found.";
+    return;
+  }
+  let arr =
+    type === "notes"
+      ? ch.notes
+      : type === "dpp"
+      ? ch.dpp
+      : type === "solutions"
+      ? ch.solutions
+      : ch.tests;
+  if (isNaN(idx) || idx < 0 || idx >= arr.length) {
+    adminResMsg.textContent = "Resource not found.";
+    return;
+  }
+  arr.splice(idx, 1);
+  adminResMsg.textContent = "Resource deleted.";
+  saveToStorage("praxis-course-data", courseData);
+  populateResourceDropdowns();
+  if (
+    currentBatchId === batchId &&
+    currentSubjectId === subjId &&
+    currentChapterId === chapterId
+  ) {
+    const updated = getChapter(batchId, subjId, chapterId);
+    renderChapterContent(updated);
+  }
+});
+
+// ===== Init ===================================================
+
+function init() {
   populateAdminSelectors();
-  renderAnnouncements();
-  pushAnnouncementNotification(obj);
-});
-
-adminDeleteAnnouncementBtn.addEventListener("click", () => {
-  const idx = parseInt(adminAnnouncementDeleteSelect.value, 10);
-  if (isNaN(idx)) {
-    adminAnnouncementMsg.textContent = "No announcement selected.";
-    return;
-  }
-  announcements.splice(idx, 1);
-  adminAnnouncementMsg.textContent = "Announcement deleted.";
-  populateAdminSelectors();
-  renderAnnouncements();
-});
-
-// Initial admin selector population
-populateAdminSelectors();
-renderAnnouncements();
+  updateOverallProgress();
+}
+init();
