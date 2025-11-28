@@ -1,47 +1,53 @@
-// ===== Local data & state =====================================
+// app.js (GLOBAL – Firestore-based)
+//
+// - Reads all course data from Firestore on load
+// - Admin actions write to Firestore (global)
+// - Progress still stored locally (per browser) for now
+// - Auth: Google Sign in; admin = quizzo2k25@gmail.com / hello@gmail.com
 
-// Initial demo data
-const defaultCourseData = {
-  batches: [
-    {
-      id: "class10-main",
-      name: "Class 10 – Board Booster",
-      classLevel: "10",
-      subjects: [
-        {
-          id: "math10",
-          name: "Mathematics",
-          chapters: [
-            {
-              id: "math10-real",
-              name: "Chapter 1: Real Numbers",
-              description: "Euclid's division lemma, fundamental theorem of arithmetic…",
-              lectures: [
-                {
-                  id: "L1",
-                  title: "Introduction to Real Numbers",
-                  youtubeId: "dQw4w9WgXcQ",
-                },
-              ],
-              notes: [],
-              dpp: [],
-              solutions: [],
-              tests: [],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "class12-main",
-      name: "Class 12 – Placeholder Batch",
-      classLevel: "12",
-      subjects: [],
-    },
-  ],
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+// ===== Firebase init =========================================
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAO6lAxJ8DTqRq62E-8PIxnwBBWm-vZ-d4",
+  authDomain: "praxis-cd621.firebaseapp.com",
+  projectId: "praxis-cd621",
+  storageBucket: "praxis-cd621.firebasestorage.app",
+  messagingSenderId: "924385334052",
+  appId: "1:924385334052:web:89ff6ab687f2dd769e19b1",
 };
 
-let courseData = loadFromStorage("praxis-course-data", defaultCourseData);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+// Admins by email (simple check in front-end; rules should also check)
+const ADMIN_EMAILS = ["quizzo2k25@gmail.com", "hello@gmail.com"];
+
+let currentUser = null;
+let isAdmin = false;
+
+// ===== Local state ===========================================
+
+let courseData = { batches: [] };
+
 let userProgress = loadFromStorage("praxis-progress", {
   completedLectures: {},
 });
@@ -52,7 +58,7 @@ let currentSubjectId = null;
 let currentChapterId = null;
 let currentPlayingLectureKey = null;
 
-// ===== Utility ================================================
+// ===== Utility ===============================================
 
 function saveToStorage(key, value) {
   try {
@@ -93,12 +99,115 @@ function getChapter(batchId, subjectId, chapterId) {
   return subj.chapters.find((c) => c.id === chapterId) || null;
 }
 
-// ===== DOM shortcuts ==========================================
+// ===== Firestore: load course tree ===========================
+
+async function loadCourseFromFirestore() {
+  courseData = { batches: [] };
+
+  const batchesSnap = await getDocs(collection(db, "batches"));
+  for (const batchDoc of batchesSnap.docs) {
+    const batchId = batchDoc.id;
+    const batchData = batchDoc.data();
+    const batchObj = {
+      id: batchId,
+      name: batchData.name,
+      classLevel: batchData.classLevel,
+      subjects: [],
+    };
+
+    const subjectsSnap = await getDocs(
+      collection(db, "batches", batchId, "subjects")
+    );
+
+    for (const subjDoc of subjectsSnap.docs) {
+      const subjectId = subjDoc.id;
+      const subjectData = subjDoc.data();
+      const subjObj = {
+        id: subjectId,
+        name: subjectData.name,
+        chapters: [],
+      };
+
+      const chaptersSnap = await getDocs(
+        collection(db, "batches", batchId, "subjects", subjectId, "chapters")
+      );
+
+      for (const chDoc of chaptersSnap.docs) {
+        const chapterId = chDoc.id;
+        const chData = chDoc.data();
+        const chapterObj = {
+          id: chapterId,
+          name: chData.name,
+          description: chData.description || "",
+          lectures: [],
+          notes: [],
+          dpp: [],
+          solutions: [],
+          tests: [],
+        };
+
+        const lecturesSnap = await getDocs(
+          collection(
+            db,
+            "batches",
+            batchId,
+            "subjects",
+            subjectId,
+            "chapters",
+            chapterId,
+            "lectures"
+          )
+        );
+        lecturesSnap.forEach((lecDoc) => {
+          const data = lecDoc.data();
+          chapterObj.lectures.push({
+            id: lecDoc.id,
+            title: data.title,
+            youtubeId: data.youtubeId,
+          });
+        });
+
+        const resSnap = await getDocs(
+          collection(
+            db,
+            "batches",
+            batchId,
+            "subjects",
+            subjectId,
+            "chapters",
+            chapterId,
+            "resources"
+          )
+        );
+        resSnap.forEach((resDoc) => {
+          const r = resDoc.data();
+          const resObj = {
+            id: resDoc.id,
+            title: r.title,
+            url: r.url,
+            type: r.type,
+          };
+          if (r.type === "notes") chapterObj.notes.push(resObj);
+          else if (r.type === "dpp") chapterObj.dpp.push(resObj);
+          else if (r.type === "solutions") chapterObj.solutions.push(resObj);
+          else if (r.type === "tests") chapterObj.tests.push(resObj);
+        });
+
+        subjObj.chapters.push(chapterObj);
+      }
+
+      batchObj.subjects.push(subjObj);
+    }
+
+    courseData.batches.push(batchObj);
+  }
+}
+
+// ===== DOM shortcuts =========================================
 
 const qs = (sel) => document.querySelector(sel);
 const qsa = (sel) => Array.from(document.querySelectorAll(sel));
 
-// Views & nav
 const views = {
   dashboardView: qs("#dashboardView"),
   courseView: qs("#courseView"),
@@ -117,7 +226,16 @@ qsa(".topnav-item").forEach((btn) => {
   });
 });
 
-// Mobile nav toggle
+function switchView(viewId) {
+  qsa(".topnav-item").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.view === viewId)
+  );
+  Object.entries(views).forEach(([id, el]) =>
+    el.classList.toggle("active", id === viewId)
+  );
+}
+
+// Mobile nav
 const navToggle = qs("#navToggle");
 const topbarEl = qs(".topbar");
 if (navToggle && topbarEl) {
@@ -126,7 +244,7 @@ if (navToggle && topbarEl) {
   });
 }
 
-// Theme toggle
+// Theme
 const themeToggle = qs("#themeToggle");
 const root = document.documentElement;
 (function initTheme() {
@@ -142,7 +260,55 @@ themeToggle.addEventListener("click", () => {
   themeToggle.textContent = next === "dark" ? "🌙" : "☀️";
 });
 
-// ===== Dashboard ==============================================
+// ===== Auth ==================================================
+
+const authArea = qs("#authArea");
+const userStatusMsg = qs("#userStatusMsg");
+const adminStatus = qs("#adminStatus");
+
+function renderAuthArea() {
+  authArea.innerHTML = "";
+  if (!currentUser) {
+    const btn = document.createElement("button");
+    btn.id = "loginBtn";
+    btn.className = "btn-primary small";
+    btn.textContent = "Sign in with Google";
+    btn.addEventListener("click", handleLogin);
+    authArea.appendChild(btn);
+    userStatusMsg.textContent =
+      "Not signed in. You can browse, but admin changes & synced progress need login.";
+    adminStatus.textContent =
+      "Sign in as admin (quizzo2k25@gmail.com or hello@gmail.com) to edit.";
+  } else {
+    const btn = document.createElement("button");
+    btn.className = "btn-secondary small";
+    btn.textContent = `${currentUser.email || "User"} – Sign out`;
+    btn.addEventListener("click", () => signOut(auth));
+    authArea.appendChild(btn);
+    userStatusMsg.textContent = isAdmin
+      ? `Signed in as admin: ${currentUser.email}`
+      : `Signed in as ${currentUser.email || "user"}`;
+    adminStatus.textContent = isAdmin
+      ? "You are admin – changes will be saved globally."
+      : "You are not admin. You can view, but not edit (writes will fail).";
+  }
+}
+
+async function handleLogin() {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    alert("Login failed: " + e.message);
+  }
+}
+
+onAuthStateChanged(auth, (user) => {
+  currentUser = user;
+  isAdmin = !!(user && user.email && ADMIN_EMAILS.includes(user.email));
+  renderAuthArea();
+});
+
+// ===== Dashboard =============================================
 
 const overallProgressEl = qs("#overallProgress");
 const recentActivityEl = qs("#recentActivity");
@@ -157,21 +323,11 @@ qsa(".pathway-card").forEach((btn) => {
 });
 
 qs("#startStudy").addEventListener("click", () => {
-  // default to class 10
   openClass("10");
   switchView("courseView");
 });
 
-function switchView(viewId) {
-  qsa(".topnav-item").forEach((btn) =>
-    btn.classList.toggle("active", btn.dataset.view === viewId)
-  );
-  Object.entries(views).forEach(([id, el]) =>
-    el.classList.toggle("active", id === viewId)
-  );
-}
-
-// ===== Course view ============================================
+// ===== Course view ===========================================
 
 const batchSelect = qs("#batchSelect");
 const subjectSelect = qs("#subjectSelect");
@@ -186,7 +342,6 @@ const dppListEl = qs("#dppList");
 const solutionsListEl = qs("#solutionsList");
 const testsListEl = qs("#testsList");
 
-// Tabs
 const tabButtons = qsa(".tab");
 const tabPanels = qsa(".tab-panel");
 tabButtons.forEach((btn) => {
@@ -221,7 +376,6 @@ function closeVideo() {
   currentPlayingLectureKey = null;
 }
 
-// handle classes
 function openClass(level) {
   currentClassLevel = level;
   currentClassLabelEl.textContent =
@@ -301,7 +455,7 @@ function renderChapterList() {
 
   if (!subj.chapters.length) {
     chapterListEl.innerHTML =
-      "<li class='muted small'>No chapters. Create from Admin panel.</li>";
+      "<li class='muted small'>No chapters. Use Admin to add.</li>";
   }
 }
 
@@ -544,7 +698,15 @@ function renderAnalysisDetail() {
   analysisContentEl.appendChild(wrapper);
 }
 
-// ===== Admin panel ============================================
+// ===== Admin panel (global – Firestore writes) ===============
+
+function requireAdmin() {
+  if (!currentUser || !isAdmin) {
+    alert("Only admins can perform this action.");
+    return false;
+  }
+  return true;
+}
 
 // DOM refs
 const adminBatchClass = qs("#adminBatchClass");
@@ -591,9 +753,8 @@ const resSelect = qs("#resSelect");
 const delResBtn = qs("#delResBtn");
 const adminResMsg = qs("#adminResMsg");
 
-// Populate admin selects
+// Populate admin selects based on courseData
 function populateAdminSelectors() {
-  // batches
   [adminBatchSelect, adminSubjectBatch, adminChapterBatch, lecBatch, resBatch].forEach(
     (sel) => (sel.innerHTML = "")
   );
@@ -621,7 +782,8 @@ function populateAdminSubjectSelects() {
   lecSubject.innerHTML = "";
   resSubject.innerHTML = "";
 
-  const batchId = adminSubjectBatch.value || (courseData.batches[0] && courseData.batches[0].id);
+  const batchId =
+    adminSubjectBatch.value || (courseData.batches[0] && courseData.batches[0].id);
   if (!batchId) return;
   const batch = getBatchById(batchId);
   if (!batch) return;
@@ -731,9 +893,9 @@ function populateResourceDropdowns() {
       : type === "solutions"
       ? ch.solutions
       : ch.tests;
-  arr.forEach((r, idx) => {
+  arr.forEach((r) => {
     const opt = document.createElement("option");
-    opt.value = idx;
+    opt.value = r.id;
     opt.textContent = r.title;
     resSelect.appendChild(opt);
   });
@@ -741,8 +903,54 @@ function populateResourceDropdowns() {
 resType.addEventListener("change", populateResourceDropdowns);
 resChapter.addEventListener("change", populateResourceDropdowns);
 
-// Batch actions
-adminAddBatchBtn.addEventListener("click", () => {
+// --- Firestore paths helpers ---------------------------------
+function batchDoc(batchId) {
+  return doc(db, "batches", batchId);
+}
+function subjectDoc(batchId, subjectId) {
+  return doc(db, "batches", batchId, "subjects", subjectId);
+}
+function chapterDoc(batchId, subjectId, chapterId) {
+  return doc(
+    db,
+    "batches",
+    batchId,
+    "subjects",
+    subjectId,
+    "chapters",
+    chapterId
+  );
+}
+function lectureDoc(batchId, subjectId, chapterId, lectureId) {
+  return doc(
+    db,
+    "batches",
+    batchId,
+    "subjects",
+    subjectId,
+    "chapters",
+    chapterId,
+    "lectures",
+    lectureId
+  );
+}
+function resourceDoc(batchId, subjectId, chapterId, resourceId) {
+  return doc(
+    db,
+    "batches",
+    batchId,
+    "subjects",
+    subjectId,
+    "chapters",
+    chapterId,
+    "resources",
+    resourceId
+  );
+}
+
+// --- Batch actions -------------------------------------------
+adminAddBatchBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const level = adminBatchClass.value;
   const name = adminNewBatchName.value.trim();
   if (!name) {
@@ -750,132 +958,146 @@ adminAddBatchBtn.addEventListener("click", () => {
     return;
   }
   const id = `${level}-${Date.now()}`;
-  courseData.batches.push({
-    id,
-    name,
-    classLevel: level,
-    subjects: [],
-  });
-  adminNewBatchName.value = "";
-  adminBatchMsg.textContent = "Batch created.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
+  try {
+    await setDoc(batchDoc(id), { name, classLevel: level });
+    adminNewBatchName.value = "";
+    adminBatchMsg.textContent = "Batch created (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (currentClassLevel === level) {
+      openClass(level);
+    }
+  } catch (e) {
+    adminBatchMsg.textContent = "Error: " + e.message;
+  }
 });
 
-adminDeleteBatchBtn.addEventListener("click", () => {
+adminDeleteBatchBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const id = adminBatchSelect.value;
-  const idx = courseData.batches.findIndex((b) => b.id === id);
-  if (idx === -1) {
-    adminBatchMsg.textContent = "Batch not found.";
+  if (!id) {
+    adminBatchMsg.textContent = "Select batch.";
     return;
   }
-  courseData.batches.splice(idx, 1);
-  adminBatchMsg.textContent = "Batch deleted.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
-  renderChapterList();
+  try {
+    await deleteDoc(batchDoc(id)); // NOTE: subcollections not auto-deleted; clean manually in real app
+    adminBatchMsg.textContent = "Batch deleted (document only).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    renderChapterList();
+    updateOverallProgress();
+  } catch (e) {
+    adminBatchMsg.textContent = "Error: " + e.message;
+  }
 });
 
-// Subject actions
-adminAddSubjectBtn.addEventListener("click", () => {
+// --- Subject actions -----------------------------------------
+adminAddSubjectBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = adminSubjectBatch.value;
   const name = adminNewSubjectName.value.trim();
   if (!batchId || !name) {
     adminSubjectMsg.textContent = "Select batch & enter subject name.";
     return;
   }
-  const batch = getBatchById(batchId);
-  if (!batch) {
-    adminSubjectMsg.textContent = "Batch not found.";
-    return;
-  }
   const id = name.toLowerCase().replace(/\s+/g, "") + Date.now();
-  batch.subjects.push({ id, name, chapters: [] });
-  adminNewSubjectName.value = "";
-  adminSubjectMsg.textContent = "Subject created.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
+  try {
+    await setDoc(subjectDoc(batchId, id), { name });
+    adminNewSubjectName.value = "";
+    adminSubjectMsg.textContent = "Subject created (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (currentBatchId === batchId) {
+      populateSubjectSelect();
+      renderChapterList();
+    }
+  } catch (e) {
+    adminSubjectMsg.textContent = "Error: " + e.message;
+  }
 });
 
-adminDeleteSubjectBtn.addEventListener("click", () => {
+adminDeleteSubjectBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = adminSubjectBatch.value;
   const subjId = adminSubjectSelect.value;
-  const batch = getBatchById(batchId);
-  if (!batch) {
-    adminSubjectMsg.textContent = "Batch not found.";
+  if (!batchId || !subjId) {
+    adminSubjectMsg.textContent = "Select subject.";
     return;
   }
-  const idx = batch.subjects.findIndex((s) => s.id === subjId);
-  if (idx === -1) {
-    adminSubjectMsg.textContent = "Subject not found.";
-    return;
+  try {
+    await deleteDoc(subjectDoc(batchId, subjId));
+    adminSubjectMsg.textContent =
+      "Subject deleted (document only, subcollections not auto-deleted).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (currentBatchId === batchId) {
+      populateSubjectSelect();
+      renderChapterList();
+    }
+    updateOverallProgress();
+  } catch (e) {
+    adminSubjectMsg.textContent = "Error: " + e.message;
   }
-  batch.subjects.splice(idx, 1);
-  adminSubjectMsg.textContent = "Subject deleted.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
-  renderChapterList();
 });
 
-// Chapter actions
-adminAddChapterBtn.addEventListener("click", () => {
+// --- Chapter actions -----------------------------------------
+adminAddChapterBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = adminChapterBatch.value;
   const subjId = adminChapterSubject.value;
   const name = adminNewChapterName.value.trim();
   const desc = adminNewChapterDesc.value.trim();
-  const batch = getBatchById(batchId);
-  const subj = getSubject(batch, subjId);
-  if (!batch || !subj) {
-    adminChapterMsg.textContent = "Batch/subject not found.";
-    return;
-  }
-  if (!name) {
-    adminChapterMsg.textContent = "Enter chapter name.";
+  if (!batchId || !subjId || !name) {
+    adminChapterMsg.textContent = "Select batch/subject & enter name.";
     return;
   }
   const id = name.toLowerCase().replace(/\s+/g, "-") + Date.now();
-  subj.chapters.push({
-    id,
-    name,
-    description: desc,
-    lectures: [],
-    notes: [],
-    dpp: [],
-    solutions: [],
-    tests: [],
-  });
-  adminNewChapterName.value = "";
-  adminNewChapterDesc.value = "";
-  adminChapterMsg.textContent = "Chapter created.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
-  renderChapterList();
+  try {
+    await setDoc(chapterDoc(batchId, subjId, id), {
+      name,
+      description: desc,
+    });
+    adminNewChapterName.value = "";
+    adminNewChapterDesc.value = "";
+    adminChapterMsg.textContent = "Chapter created (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (currentBatchId === batchId && currentSubjectId === subjId) {
+      renderChapterList();
+    }
+    updateOverallProgress();
+  } catch (e) {
+    adminChapterMsg.textContent = "Error: " + e.message;
+  }
 });
 
-adminDeleteChapterBtn.addEventListener("click", () => {
+adminDeleteChapterBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = adminChapterBatch.value;
   const subjId = adminChapterSubject.value;
   const chapterId = adminChapterSelect.value;
-  const batch = getBatchById(batchId);
-  const subj = getSubject(batch, subjId);
-  if (!subj) {
-    adminChapterMsg.textContent = "Subject not found.";
+  if (!batchId || !subjId || !chapterId) {
+    adminChapterMsg.textContent = "Select chapter.";
     return;
   }
-  const idx = subj.chapters.findIndex((c) => c.id === chapterId);
-  if (idx === -1) {
-    adminChapterMsg.textContent = "Chapter not found.";
-    return;
+  try {
+    await deleteDoc(chapterDoc(batchId, subjId, chapterId));
+    adminChapterMsg.textContent =
+      "Chapter deleted (document only, subcollections not auto-deleted).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (currentBatchId === batchId && currentSubjectId === subjId) {
+      renderChapterList();
+    }
+    updateOverallProgress();
+  } catch (e) {
+    adminChapterMsg.textContent = "Error: " + e.message;
   }
-  subj.chapters.splice(idx, 1);
-  adminChapterMsg.textContent = "Chapter deleted.";
-  saveToStorage("praxis-course-data", courseData);
-  populateAdminSelectors();
-  renderChapterList();
 });
 
-// Lecture actions
-addLectureBtn.addEventListener("click", () => {
+// --- Lecture actions -----------------------------------------
+addLectureBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = lecBatch.value;
   const subjId = lecSubject.value;
   const chapterId = lecChapter.value;
@@ -885,61 +1107,63 @@ addLectureBtn.addEventListener("click", () => {
     adminLectureMsg.textContent = "Fill all lecture fields.";
     return;
   }
-  const ch = getChapter(batchId, subjId, chapterId);
-  if (!ch) {
-    adminLectureMsg.textContent = "Chapter not found.";
-    return;
-  }
-  const id = `L${Date.now()}`;
-  ch.lectures.push({
-    id,
-    title,
-    youtubeId: yt,
-  });
-  lecTitle.value = "";
-  lecYT.value = "";
-  adminLectureMsg.textContent = "Lecture added.";
-  saveToStorage("praxis-course-data", courseData);
-  populateLectureDropdowns();
-  if (
-    currentBatchId === batchId &&
-    currentSubjectId === subjId &&
-    currentChapterId === chapterId
-  ) {
-    renderChapterContent(ch);
+  const lectureId = `L${Date.now()}`;
+  try {
+    await setDoc(lectureDoc(batchId, subjId, chapterId, lectureId), {
+      title,
+      youtubeId: yt,
+    });
+    lecTitle.value = "";
+    lecYT.value = "";
+    adminLectureMsg.textContent = "Lecture added (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (
+      currentBatchId === batchId &&
+      currentSubjectId === subjId &&
+      currentChapterId === chapterId
+    ) {
+      const ch = getChapter(batchId, subjId, chapterId);
+      renderChapterContent(ch);
+    }
+    updateOverallProgress();
+  } catch (e) {
+    adminLectureMsg.textContent = "Error: " + e.message;
   }
 });
 
-deleteLectureBtn.addEventListener("click", () => {
+deleteLectureBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = lecBatch.value;
   const subjId = lecSubject.value;
   const chapterId = lecChapter.value;
   const lectureId = lecSelect.value;
-  const ch = getChapter(batchId, subjId, chapterId);
-  if (!ch) {
-    adminLectureMsg.textContent = "Chapter not found.";
+  if (!batchId || !subjId || !chapterId || !lectureId) {
+    adminLectureMsg.textContent = "Select lecture.";
     return;
   }
-  const idx = ch.lectures.findIndex((l) => l.id === lectureId);
-  if (idx === -1) {
-    adminLectureMsg.textContent = "Lecture not found.";
-    return;
-  }
-  ch.lectures.splice(idx, 1);
-  adminLectureMsg.textContent = "Lecture deleted.";
-  saveToStorage("praxis-course-data", courseData);
-  populateLectureDropdowns();
-  if (
-    currentBatchId === batchId &&
-    currentSubjectId === subjId &&
-    currentChapterId === chapterId
-  ) {
-    renderChapterContent(ch);
+  try {
+    await deleteDoc(lectureDoc(batchId, subjId, chapterId, lectureId));
+    adminLectureMsg.textContent = "Lecture deleted (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (
+      currentBatchId === batchId &&
+      currentSubjectId === subjId &&
+      currentChapterId === chapterId
+    ) {
+      const ch = getChapter(batchId, subjId, chapterId);
+      renderChapterContent(ch);
+    }
+    updateOverallProgress();
+  } catch (e) {
+    adminLectureMsg.textContent = "Error: " + e.message;
   }
 });
 
-// Resource actions
-addResBtn.addEventListener("click", () => {
+// --- Resource actions ----------------------------------------
+addResBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = resBatch.value;
   const subjId = resSubject.value;
   const chapterId = resChapter.value;
@@ -950,73 +1174,68 @@ addResBtn.addEventListener("click", () => {
     adminResMsg.textContent = "Fill all resource fields.";
     return;
   }
-  const ch = getChapter(batchId, subjId, chapterId);
-  if (!ch) {
-    adminResMsg.textContent = "Chapter not found.";
-    return;
-  }
-  const obj = { title, url };
-  if (type === "notes") ch.notes.push(obj);
-  else if (type === "dpp") ch.dpp.push(obj);
-  else if (type === "solutions") ch.solutions.push(obj);
-  else ch.tests.push(obj);
-
-  resTitle.value = "";
-  resUrl.value = "";
-  adminResMsg.textContent = "Resource added.";
-  saveToStorage("praxis-course-data", courseData);
-  populateResourceDropdowns();
-  if (
-    currentBatchId === batchId &&
-    currentSubjectId === subjId &&
-    currentChapterId === chapterId
-  ) {
-    const updated = getChapter(batchId, subjId, chapterId);
-    renderChapterContent(updated);
+  const resId = `${type}-${Date.now()}`;
+  try {
+    await setDoc(resourceDoc(batchId, subjId, chapterId, resId), {
+      title,
+      url,
+      type,
+    });
+    resTitle.value = "";
+    resUrl.value = "";
+    adminResMsg.textContent = "Resource added (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (
+      currentBatchId === batchId &&
+      currentSubjectId === subjId &&
+      currentChapterId === chapterId
+    ) {
+      const ch = getChapter(batchId, subjId, chapterId);
+      renderChapterContent(ch);
+    }
+  } catch (e) {
+    adminResMsg.textContent = "Error: " + e.message;
   }
 });
 
-delResBtn.addEventListener("click", () => {
+delResBtn.addEventListener("click", async () => {
+  if (!requireAdmin()) return;
   const batchId = resBatch.value;
   const subjId = resSubject.value;
   const chapterId = resChapter.value;
   const type = resType.value;
-  const idx = parseInt(resSelect.value, 10);
-  const ch = getChapter(batchId, subjId, chapterId);
-  if (!ch) {
-    adminResMsg.textContent = "Chapter not found.";
+  const resId = resSelect.value;
+  if (!batchId || !subjId || !chapterId || !resId) {
+    adminResMsg.textContent = "Select resource.";
     return;
   }
-  let arr =
-    type === "notes"
-      ? ch.notes
-      : type === "dpp"
-      ? ch.dpp
-      : type === "solutions"
-      ? ch.solutions
-      : ch.tests;
-  if (isNaN(idx) || idx < 0 || idx >= arr.length) {
-    adminResMsg.textContent = "Resource not found.";
-    return;
-  }
-  arr.splice(idx, 1);
-  adminResMsg.textContent = "Resource deleted.";
-  saveToStorage("praxis-course-data", courseData);
-  populateResourceDropdowns();
-  if (
-    currentBatchId === batchId &&
-    currentSubjectId === subjId &&
-    currentChapterId === chapterId
-  ) {
-    const updated = getChapter(batchId, subjId, chapterId);
-    renderChapterContent(updated);
+  try {
+    await deleteDoc(resourceDoc(batchId, subjId, chapterId, resId));
+    adminResMsg.textContent = "Resource deleted (global).";
+    await loadCourseFromFirestore();
+    populateAdminSelectors();
+    if (
+      currentBatchId === batchId &&
+      currentSubjectId === subjId &&
+      currentChapterId === chapterId
+    ) {
+      const ch = getChapter(batchId, subjId, chapterId);
+      renderChapterContent(ch);
+    }
+  } catch (e) {
+    adminResMsg.textContent = "Error: " + e.message;
   }
 });
 
-// ===== Init ===================================================
+// ===== Init ==================================================
 
-function init() {
+window.addEventListener("load", async () => {
+  try {
+    await loadCourseFromFirestore();
+  } catch (e) {
+    console.error("Error loading Firestore data:", e);
+  }
   populateAdminSelectors();
   updateOverallProgress();
-}
-init();
+});
