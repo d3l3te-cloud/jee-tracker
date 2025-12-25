@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PRAXIS | GATE ENTRY SCANNER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #000; color: white; }
+        .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
+        .status-box { transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-6">
+    <div class="glass w-full max-w-md p-10 rounded-[3rem] text-center">
+        <h1 class="font-black text-3xl italic tracking-tighter mb-2">GATE ENTRY</h1>
+        <p class="text-[10px] opacity-40 uppercase tracking-[0.3em] mb-10">Verification Terminal</p>
+
+        <div class="space-y-4">
+            <input id="ticket-id" type="text" placeholder="PASTE TICKET ID HERE" 
+                   class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-center text-sm font-mono outline-none focus:border-purple-500">
+            
+            <button onclick="validateTicket()" id="scan-btn"
+                    class="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-purple-500 hover:text-white transition-all">
+                Validate & Mark Entry
+            </button>
+        </div>
+
+        <div id="result-box" class="mt-8 p-6 rounded-2xl hidden status-box">
+            <p id="result-msg" class="font-black uppercase italic text-sm"></p>
+            <p id="result-detail" class="text-[10px] opacity-60 mt-2 uppercase"></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyBDcvXVhv-hn0lTrIxfjrPlp2B5N0Vk_As",
+                                authDomain: "praxis-tickets.firebaseapp.com",
+                                projectId: "praxis-tickets",
+                                storageBucket: "praxis-tickets.firebasestorage.app",
+                                messagingSenderId: "865044869844",
+                                appId: "1:865044869844:web:7fe4fc422d158f5c2c0141" };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Security: Ensure only Admin can scan (optional, but safer)
+        onAuthStateChanged(auth, (user) => {
+            if (!user || user.email !== "admin@praxis.co") {
+                alert("Only Admin authorized to use scanner.");
+                window.location.href = "index.html";
+            }
+        });
+
+        window.validateTicket = async () => {
+            const id = document.getElementById('ticket-id').value.trim();
+            const box = document.getElementById('result-box');
+            const msg = document.getElementById('result-msg');
+            const detail = document.getElementById('result-detail');
+            const btn = document.getElementById('scan-btn');
+
+            if(!id) return;
+
+            // UI Reset
+            btn.innerText = "Checking...";
+            btn.disabled = true;
+            box.classList.add('hidden');
+
+            try {
+                const docRef = doc(db, "tickets", id);
+                const snap = await getDoc(docRef);
+
+                if (!snap.exists()) {
+                    showResult("Error", "Ticket ID Not Found", "bg-red-500/20 text-red-400");
+                } else {
+                    const data = snap.data();
+                    const isExpired = new Date(data.eventDate) < new Date();
+
+                    if (data.status !== "approved") {
+                        showResult("Denied", "Payment Not Approved Yet", "bg-yellow-500/20 text-yellow-400");
+                    } else if (data.isUsed) {
+                        showResult("Used", "Already Checked-In", "bg-orange-500/20 text-orange-400");
+                    } else if (isExpired) {
+                        showResult("Expired", "Event Date has passed", "bg-gray-500/20 text-gray-400");
+                    } else {
+                        // SUCCESS: Update Database
+                        await updateDoc(docRef, { isUsed: true });
+                        showResult("Success", `Valid: ${data.eventName} (${data.class})`, "bg-green-500/20 text-green-400");
+                    }
+                }
+            } catch (e) {
+                showResult("Error", e.message, "bg-red-500/20 text-red-400");
+            } finally {
+                btn.innerText = "Validate & Mark Entry";
+                btn.disabled = false;
+            }
+        };
+
+        function showResult(title, text, colorClass) {
+            const box = document.getElementById('result-box');
+            box.className = `mt-8 p-6 rounded-2xl status-box ${colorClass}`;
+            document.getElementById('result-msg').innerText = title;
+            document.getElementById('result-detail').innerText = text;
+            box.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

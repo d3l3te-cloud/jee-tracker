@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRAXIS | Experience Elevated</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --brand: #8b5cf6; }
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
+        h1, h2, h3 { font-family: 'Syne', sans-serif; }
+        .mesh-gradient { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 35%), radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.12) 0%, transparent 35%); z-index: -1; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .btn-premium { background: #fff; color: #000; transition: all 0.3s ease; cursor: pointer; border: none; }
+        .btn-premium:hover:not(:disabled) { background: var(--brand); color: #fff; box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+        .btn-premium:disabled { opacity: 0.3; cursor: not-allowed; }
+        #account-panel { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .hidden { display: none !important; }
+        .tier-active { border-color: var(--brand) !important; background: rgba(139, 92, 246, 0.1) !important; }
+    </style>
+</head>
+<body class="bg-black">
+    <div class="mesh-gradient"></div>
+
+    <nav class="fixed top-0 w-full z-50 bg-black/50 backdrop-blur-lg border-b border-white/5 px-8 py-5 flex justify-between items-center">
+        <span class="text-2xl font-black tracking-tighter italic cursor-pointer" onclick="location.reload()">PRAXIS.</span>
+        <div class="flex items-center gap-6">
+            <button id="nav-login-btn" onclick="openAuth()" class="text-[10px] font-bold uppercase tracking-widest">Login</button>
+            <button id="nav-acc-btn" onclick="openAccount()" class="hidden btn-premium px-6 py-2 rounded-full text-[10px] font-black uppercase">Account</button>
+        </div>
+    </nav>
+
+    <section class="pt-40 px-8 max-w-7xl mx-auto pb-20">
+        <h1 class="text-7xl md:text-9xl font-black italic mb-20 uppercase leading-none tracking-tighter">Live<br>Now.</h1>
+        <div id="events-grid" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
+    </section>
+
+    <div id="booking-overlay" class="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-center justify-center hidden">
+        <div class="glass-card p-10 rounded-[3rem] w-full max-w-lg relative">
+            <button onclick="closeBooking()" class="absolute top-6 right-8 opacity-40 hover:opacity-100">✕</button>
+            
+            <div id="step-select">
+                <h2 class="text-3xl font-black italic uppercase mb-2">Reserve Spot</h2>
+                <p id="book-event-name" class="text-purple-400 font-bold uppercase text-[10px] tracking-widest mb-8"></p>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6 text-left">
+                    <button id="tier-std" onclick="setTier('Standard', 45)" class="p-4 border border-white/10 rounded-2xl transition tier-active">
+                        <b class="block uppercase italic text-xs">Standard</b>
+                        <span class="font-black opacity-60">$45</span>
+                    </button>
+                    <button id="tier-vip" onclick="setTier('VIP', 120)" class="p-4 border border-white/10 rounded-2xl transition hover:bg-white/5">
+                        <b class="block uppercase italic text-xs">VIP Access</b>
+                        <span class="font-black opacity-60">$120</span>
+                    </button>
+                </div>
+
+                <div class="mb-8 text-left">
+                    <label class="block text-[10px] uppercase font-bold opacity-30 mb-2 ml-2 tracking-widest">Verification Email</label>
+                    <input id="verify-email-input" type="email" placeholder="Enter email to receive OTP" 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-purple-500 transition text-sm">
+                </div>
+
+                <button onclick="sendBookingOTP()" class="btn-premium w-full py-4 rounded-2xl font-black uppercase text-xs">Send Code</button>
+            </div>
+
+            <div id="step-verify" class="hidden text-center">
+                <h2 class="text-3xl font-black italic uppercase mb-2">Verify</h2>
+                <p id="otp-sent-info" class="text-[10px] opacity-40 mb-8 uppercase tracking-widest"></p>
+                <input id="otp-input" type="text" placeholder="000000" maxlength="6" 
+                    class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-6 mb-6 text-center text-4xl font-black tracking-widest outline-none">
+                <button onclick="confirmFinalBooking()" class="btn-premium w-full py-4 rounded-2xl font-black uppercase text-xs">Verify & Request</button>
+                <button onclick="showStep(1)" class="mt-4 block w-full text-[8px] opacity-20 uppercase font-bold tracking-widest">Change Email</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="auth-modal" class="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center hidden">
+        <div class="glass-card p-10 rounded-[3rem] w-full max-w-md relative text-center">
+            <button onclick="closeAuth()" class="absolute top-6 right-8 opacity-50">✕</button>
+            <h2 id="auth-title" class="text-4xl font-black mb-8 italic uppercase">Welcome.</h2>
+            <input id="auth-email" type="email" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none">
+            <input id="auth-password" type="password" placeholder="Password" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-8 outline-none">
+            <button onclick="executeAuth()" class="btn-premium w-full py-4 rounded-2xl font-black uppercase text-xs">Continue</button>
+            <button onclick="toggleAuthMode()" id="toggle-btn" class="text-[10px] opacity-40 uppercase mt-4 block w-full">Create Account</button>
+        </div>
+    </div>
+
+    <div id="account-panel" class="fixed top-0 right-0 h-full w-full md:w-[400px] z-[500] bg-black border-l border-white/10 p-10 translate-x-full">
+        <div class="flex justify-between items-center mb-10">
+            <h2 class="text-3xl font-black italic uppercase">Account</h2>
+            <button onclick="closeAccount()" class="opacity-40">✕</button>
+        </div>
+        <div id="active-tickets" class="space-y-4 mb-10 overflow-y-auto max-h-[60vh]"></div>
+        <button onclick="triggerLogout()" class="w-full py-4 border border-red-500/20 text-red-500 text-[10px] font-black uppercase rounded-2xl">Sign Out</button>
+    </div>
+
+    <div id="qr-modal" class="fixed inset-0 z-[600] bg-black/98 flex flex-col items-center justify-center hidden">
+        <div id="zoom-qr-box" class="bg-white p-4 rounded-3xl mb-8"></div>
+        <button onclick="document.getElementById('qr-modal').classList.add('hidden')" class="btn-premium px-12 py-4 rounded-full font-black uppercase text-xs">Close</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBDcvXVhv-hn0lTrIxfjrPlp2B5N0Vk_As",
+            authDomain: "praxis-tickets.firebaseapp.com",
+            projectId: "praxis-tickets",
+            storageBucket: "praxis-tickets.firebasestorage.app",
+            messagingSenderId: "865044869844",
+            appId: "1:865044869844:web:7fe4fc422d158f5c2c0141"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // INITIALIZE EMAILJS WITH YOUR PUBLIC KEY
+        emailjs.init("A9gvj50d9xfwuaCq_");
+
+        let activeBooking = {};
+        let generatedOTP = null;
+        let isSignup = false;
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                if (user.email === "admin@praxis.co") window.location.replace("admin.html");
+                document.getElementById('nav-login-btn').classList.add('hidden');
+                document.getElementById('nav-acc-btn').classList.remove('hidden');
+                loadUserTickets(user.uid);
+            } else {
+                document.getElementById('nav-login-btn').classList.remove('hidden');
+                document.getElementById('nav-acc-btn').classList.add('hidden');
+            }
+            loadEvents();
+        });
+
+        // BOOKING LOGIC
+        window.bookNow = (id, title, time) => {
+            if (!auth.currentUser) return openAuth();
+            activeBooking = { id, title, time, tier: 'Standard', price: 45 };
+            document.getElementById('book-event-name').innerText = title;
+            document.getElementById('booking-overlay').classList.remove('hidden');
+            showStep(1);
+        };
+
+        window.setTier = (tier, price) => {
+            activeBooking.tier = tier;
+            activeBooking.price = price;
+            document.getElementById('tier-std').classList.toggle('tier-active', tier === 'Standard');
+            document.getElementById('tier-vip').classList.toggle('tier-active', tier === 'VIP');
+        };
+
+        window.sendBookingOTP = async () => {
+            const inputEmail = document.getElementById('verify-email-input').value.trim();
+            if (!inputEmail.includes('@')) return alert("Please enter a valid email address.");
+            
+            activeBooking.verifyEmail = inputEmail;
+            generatedOTP = Math.floor(100000 + Math.random() * 900000);
+            
+            // Format time for {{time}} variable in your template
+            const expiryTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            try {
+                // MATCHING YOUR TEMPLATE: {{email}}, {{passcode}}, {{time}}
+                await emailjs.send("service_ctg57ig", "template_6rsdu08", {
+                    email: inputEmail,
+                    passcode: generatedOTP,
+                    time: expiryTime
+                });
+                document.getElementById('otp-sent-info').innerText = `OTP sent to: ${inputEmail}`;
+                showStep(2);
+            } catch (e) { 
+                alert("Failed to send OTP. Check your EmailJS connection.");
+                console.error(e);
+            }
+        };
+
+        window.confirmFinalBooking = async () => {
+            if (document.getElementById('otp-input').value != generatedOTP) return alert("Invalid Code");
+
+            try {
+                await addDoc(collection(db, "tickets"), {
+                    userId: auth.currentUser.uid,
+                    buyerEmail: auth.currentUser.email,
+                    verifiedEmail: activeBooking.verifyEmail,
+                    eventName: activeBooking.title,
+                    eventDocId: activeBooking.id,
+                    tier: activeBooking.tier,
+                    price: activeBooking.price,
+                    status: "pending",
+                    isUsed: false,
+                    timestamp: Date.now()
+                });
+                alert("Booking Requested! Admin will verify payment.");
+                location.reload();
+            } catch (e) { alert("Booking failed: " + e.message); }
+        };
+
+        function showStep(s) {
+            document.getElementById('step-select').classList.toggle('hidden', s !== 1);
+            document.getElementById('step-verify').classList.toggle('hidden', s !== 2);
+        }
+
+        window.closeBooking = () => document.getElementById('booking-overlay').classList.add('hidden');
+
+        // UI & DATA LOADERS
+        async function loadEvents() {
+            const snap = await getDocs(collection(db, "events"));
+            const grid = document.getElementById('events-grid');
+            grid.innerHTML = '';
+            snap.forEach(d => {
+                const ev = d.data();
+                grid.innerHTML += `
+                    <div class="glass-card p-6 rounded-[2.5rem]">
+                        <img src="images/${ev.image}" onerror="this.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=500'" class="w-full h-56 object-cover rounded-3xl mb-6 grayscale hover:grayscale-0 transition duration-500">
+                        <h3 class="text-2xl font-black italic uppercase mb-2">${ev.title}</h3>
+                        <p class="text-[10px] opacity-40 font-bold uppercase mb-6">${ev.city}</p>
+                        <button onclick="bookNow('${d.id}', '${ev.title}', '${ev.showTime}')" class="btn-premium w-full py-4 rounded-2xl font-black uppercase text-[10px]">Book Experience</button>
+                    </div>`;
+            });
+        }
+
+        async function loadUserTickets(uid) {
+            const div = document.getElementById('active-tickets');
+            const q = query(collection(db, "tickets"), where("userId", "==", uid));
+            const snap = await getDocs(q);
+            div.innerHTML = '';
+            snap.forEach(d => {
+                const t = d.data();
+                if (t.status === "approved" && !t.isUsed) {
+                    const card = document.createElement('div');
+                    card.className = "glass-card p-4 rounded-2xl flex justify-between items-center cursor-pointer";
+                    card.onclick = () => {
+                        document.getElementById('zoom-qr-box').innerHTML = '';
+                        new QRCode(document.getElementById('zoom-qr-box'), { text: d.id, width: 220, height: 220 });
+                        document.getElementById('qr-modal').classList.remove('hidden');
+                    };
+                    card.innerHTML = `<div><p class="font-bold text-xs uppercase">${t.eventName}</p><p class="text-[8px] text-purple-400 font-bold">APPROVED - TAP FOR QR</p></div><div id="qr-${d.id}" class="bg-white p-1 rounded"></div>`;
+                    div.appendChild(card);
+                    new QRCode(document.getElementById(`qr-${d.id}`), { text: d.id, width: 35, height: 35 });
+                } else {
+                    div.innerHTML += `<div class="glass-card p-4 rounded-2xl opacity-40 text-[10px] uppercase flex justify-between"><span>${t.eventName}</span><span>${t.status}</span></div>`;
+                }
+            });
+        }
+
+        window.executeAuth = async () => {
+            const email = document.getElementById('auth-email').value.trim();
+            const pass = document.getElementById('auth-password').value;
+            if(!email || !pass) return alert("Enter credentials");
+            try {
+                if (isSignup) await createUserWithEmailAndPassword(auth, email, pass);
+                else await signInWithEmailAndPassword(auth, email, pass);
+                closeAuth();
+            } catch (e) { alert(e.message); }
+        };
+
+        window.toggleAuthMode = () => { isSignup = !isSignup; document.getElementById('auth-title').innerText = isSignup ? "Join." : "Welcome."; };
+        window.triggerLogout = async () => { await signOut(auth); localStorage.clear(); window.location.reload(); };
+        window.openAuth = () => document.getElementById('auth-modal').classList.remove('hidden');
+        window.closeAuth = () => document.getElementById('auth-modal').classList.add('hidden');
+        window.openAccount = () => document.getElementById('account-panel').classList.remove('translate-x-full');
+        window.closeAccount = () => document.getElementById('account-panel').classList.add('translate-x-full');
+    </script>
+</body>
+</html>
