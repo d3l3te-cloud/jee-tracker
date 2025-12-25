@@ -226,28 +226,69 @@
         }
 
         async function loadUserTickets(uid) {
-            const div = document.getElementById('active-tickets');
-            const q = query(collection(db, "tickets"), where("userId", "==", uid));
-            const snap = await getDocs(q);
-            div.innerHTML = '';
-            snap.forEach(d => {
-                const t = d.data();
-                if (t.status === "approved" && !t.isUsed) {
-                    const card = document.createElement('div');
-                    card.className = "glass-card p-4 rounded-2xl flex justify-between items-center cursor-pointer";
-                    card.onclick = () => {
-                        document.getElementById('zoom-qr-box').innerHTML = '';
-                        new QRCode(document.getElementById('zoom-qr-box'), { text: d.id, width: 220, height: 220 });
-                        document.getElementById('qr-modal').classList.remove('hidden');
-                    };
-                    card.innerHTML = `<div><p class="font-bold text-xs uppercase">${t.eventName}</p><p class="text-[8px] text-purple-400 font-bold">APPROVED - TAP FOR QR</p></div><div id="qr-${d.id}" class="bg-white p-1 rounded"></div>`;
-                    div.appendChild(card);
-                    new QRCode(document.getElementById(`qr-${d.id}`), { text: d.id, width: 35, height: 35 });
-                } else {
-                    div.innerHTML += `<div class="glass-card p-4 rounded-2xl opacity-40 text-[10px] uppercase flex justify-between"><span>${t.eventName}</span><span>${t.status}</span></div>`;
-                }
-            });
+        const div = document.getElementById('active-tickets');
+        const q = query(collection(db, "tickets"), where("userId", "==", uid));
+        const snap = await getDocs(q);
+        div.innerHTML = '';
+    
+        if(snap.empty) {
+            div.innerHTML = '<p class="text-[10px] opacity-20 uppercase text-center py-10">No tickets found</p>';
+            return;
         }
+    
+        snap.forEach(d => {
+            const t = d.data();
+            const ticketId = d.id;
+    
+            if (t.status === "approved" && !t.isUsed) {
+                const card = document.createElement('div');
+                card.className = "glass-card p-4 rounded-2xl flex justify-between items-center cursor-pointer hover:border-purple-500/50 transition";
+                
+                // Fixed Click Logic
+                card.onclick = () => {
+                    const zoomBox = document.getElementById('zoom-qr-box');
+                    zoomBox.innerHTML = ''; // Clear previous
+                    document.getElementById('qr-modal').classList.remove('hidden');
+                    
+                    // Small delay ensures the modal is visible before drawing
+                    setTimeout(() => {
+                        new QRCode(zoomBox, {
+                            text: ticketId,
+                            width: 256,
+                            height: 256,
+                            colorDark : "#000000",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
+                    }, 50);
+                };
+    
+                card.innerHTML = `
+                    <div>
+                        <p class="font-black text-xs uppercase italic">${t.eventName}</p>
+                        <p class="text-[8px] text-purple-400 font-bold tracking-widest uppercase mt-1">TAP TO VIEW PASS</p>
+                    </div>
+                    <div id="small-qr-${ticketId}" class="bg-white p-1 rounded-lg"></div>
+                `;
+                
+                div.appendChild(card);
+    
+                // Generate the small preview QR
+                new QRCode(document.getElementById(`small-qr-${ticketId}`), {
+                    text: ticketId,
+                    width: 40,
+                    height: 40
+                });
+            } else {
+                // Pending/Used tickets
+                div.innerHTML += `
+                    <div class="glass-card p-4 rounded-2xl opacity-40 text-[10px] uppercase flex justify-between items-center">
+                        <span>${t.eventName}</span>
+                        <span class="font-bold text-[8px] border border-white/20 px-2 py-1 rounded">${t.status}</span>
+                    </div>`;
+            }
+        });
+    }
 
         window.executeAuth = async () => {
             const email = document.getElementById('auth-email').value.trim();
@@ -268,4 +309,5 @@
         window.closeAccount = () => document.getElementById('account-panel').classList.add('translate-x-full');
     </script>
 </body>
+
 </html>
