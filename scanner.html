@@ -14,7 +14,6 @@
         #qr-reader { border: none !important; }
         #qr-reader__scan_region { display: flex; justify-content: center; }
         #qr-reader video { border-radius: 24px; object-fit: cover !important; }
-        /* Professional QR Overlay */
         #qr-reader__dashboard { padding: 20px !important; }
         button { text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px !important; font-weight: 900 !important; }
     </style>
@@ -43,6 +42,10 @@
         <div class="px-6 pb-10">
             <div id="result-box" class="p-8 rounded-[2.5rem] text-center hidden transition-all duration-300 transform scale-95 border">
                 <p id="result-msg" class="font-black italic text-4xl uppercase tracking-tighter"></p>
+                <div id="entry-counter" class="hidden mt-4 bg-white/10 rounded-full py-2 px-6 inline-block">
+                    <span class="text-[10px] font-black uppercase tracking-widest">Entries Left: </span>
+                    <span id="entries-val" class="text-xl font-black italic">0</span>
+                </div>
                 <p id="result-detail" class="text-[10px] font-bold opacity-70 mt-3 uppercase tracking-widest leading-relaxed"></p>
             </div>
 
@@ -87,11 +90,7 @@
         const scanner = new Html5Qrcode("qr-reader");
         let canScan = true;
 
-        const config = { 
-            fps: 20, // Faster tracking
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0 
-        };
+        const config = { fps: 20, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
 
         scanner.start(
             { facingMode: "environment" },
@@ -104,6 +103,7 @@
                     canScan = true; 
                     document.getElementById("result-box").classList.add("hidden");
                     document.getElementById("idle-msg").classList.remove("hidden");
+                    document.getElementById("entry-counter").classList.add("hidden");
                 }, 3500);
             }
         );
@@ -120,7 +120,7 @@
                 const snap = await getDoc(ref);
 
                 if (!snap.exists()) {
-                    show("INVALID", "Ticket ID not found in database", "border-red-500/50 bg-red-500/10 text-red-500");
+                    show("INVALID", "Ticket ID not found", "border-red-500/50 bg-red-500/10 text-red-500");
                     return;
                 }
 
@@ -129,15 +129,27 @@
                 if (data.status !== "approved") {
                     show("DENIED", "Order is pending or rejected", "border-yellow-500/50 bg-yellow-500/10 text-yellow-500");
                 }
-                else if (data.isUsed) {
-                    show("ALREADY USED", `Checked in at: ${new Date(data.usedAt || Date.now()).toLocaleTimeString()}`, "border-orange-500/50 bg-orange-500/10 text-orange-500");
+                else if (data.isUsed || data.remainingEntries <= 0) {
+                    show("EXHAUSTED", "No entries left on this pass", "border-orange-500/50 bg-orange-500/10 text-orange-500");
                 }
                 else {
+                    // CALCULATE NEW ENTRY COUNT
+                    const newCount = data.remainingEntries - 1;
+                    const fullyUsed = newCount === 0;
+
                     await updateDoc(ref, { 
-                        isUsed: true,
+                        remainingEntries: newCount,
+                        isUsed: fullyUsed,
                         usedAt: Date.now() 
                     });
-                    show("CLEAR TO ENTER", `${data.eventName} • ${data.tier || 'Standard'}`, "border-green-500/50 bg-green-500/10 text-green-400");
+
+                    // Update the UI to show remaining entries
+                    const counter = document.getElementById("entry-counter");
+                    const val = document.getElementById("entries-val");
+                    counter.classList.remove("hidden");
+                    val.innerText = newCount;
+
+                    show("ACCESS GRANTED", `Entry Registered • ${data.eventName}`, "border-green-500/50 bg-green-500/10 text-green-400");
                 }
             } catch (e) {
                 show("SYSTEM ERROR", e.message, "border-red-500/50 bg-red-500/10 text-red-500");
@@ -149,8 +161,6 @@
             box.className = `p-8 rounded-[2.5rem] text-center transition-all duration-300 scale-100 ${colorClass}`;
             document.getElementById("result-msg").innerText = title;
             document.getElementById("result-detail").innerText = text;
-            
-            // Haptic Feedback if supported
             if (window.navigator.vibrate) window.navigator.vibrate(100);
         }
     </script>
