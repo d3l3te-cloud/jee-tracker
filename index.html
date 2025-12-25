@@ -349,9 +349,10 @@
         window.toggleAuthMode = () => { isSignup = !isSignup; document.getElementById('auth-title').innerText = isSignup ? "Create." : "Join."; };
         window.executeAuth = async () => { const e = document.getElementById('auth-email').value, p = document.getElementById('auth-password').value; try { if(isSignup) await createUserWithEmailAndPassword(auth, e, p); else await signInWithEmailAndPassword(auth, e, p); location.reload(); } catch(e) { alert(e.message); } };
         window.triggerLogout = async () => { await signOut(auth); location.reload(); };
-        window.filterEvents = () => { const s = document.getElementById('search-input').value.toLowerCase(), l = document.getElementById('location-filter').value; const f = allEvents.filter(e => e.title.toLowerCase().includes(s) && (l === 'all' || e.city === l)); renderEventsGrid(f); };
+        v
     </script>
 </body>
 </html>
+
 
 
