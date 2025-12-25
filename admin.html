@@ -132,19 +132,18 @@
         };
 
         window.publishShow = async () => {
-        const data = {
-            title: document.getElementById('title').value.trim(),
-            // This ensures every city is saved clean: "Delhi", no spaces, proper case
-            city: document.getElementById('city').value.trim(), 
-            image: document.getElementById('img').value.trim(),
-            showTime: document.getElementById('time').value,
-            maxTickets: Number(document.getElementById('max').value),
-            ticketCount: 0,
-            prices: { 
-                standard: Number(document.getElementById('p-std').value || 3999), 
-                vip: Number(document.getElementById('p-vip').value || 8999) 
-            }
-        };
+            const data = {
+                title: document.getElementById('title').value,
+                city: document.getElementById('city').value,
+                image: document.getElementById('img').value,
+                showTime: document.getElementById('time').value,
+                maxTickets: Number(document.getElementById('max').value),
+                ticketCount: 0,
+                prices: { 
+                    standard: Number(document.getElementById('p-std').value || 3999), 
+                    vip: Number(document.getElementById('p-vip').value || 8999) 
+                }
+            };
             if(!data.title || !data.image) return alert("Fields missing");
             await addDoc(collection(db, "events"), data);
             alert("Experience is now Live!"); 
@@ -280,4 +279,3 @@
     </script>
 </body>
 </html>
-
