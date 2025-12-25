@@ -206,29 +206,17 @@
             const snap = await getDocs(collection(db, "events"));
             allEvents = snap.docs.map(d => ({id: d.id, ...d.data()}));
             
+            // Get the select element
             const select = document.getElementById('location-filter');
+            
+            // Clear existing except the first "All Locations"
             select.innerHTML = '<option value="all">All Locations</option>';
             
-            // 1. Create a map to store the 'Proper Name' against a 'lowercase version'
-            // This prevents "Delhi" and "delhi" from appearing twice.
-            const uniqueMap = new Map();
-
-            allEvents.forEach(e => {
-                if (e.city) {
-                    const cleanName = e.city.trim(); // Remove accidental spaces
-                    const lowerName = cleanName.toLowerCase(); // Standardize case
-                    
-                    if (!uniqueMap.has(lowerName)) {
-                        uniqueMap.set(lowerName, cleanName); // Store first version found
-                    }
-                }
-            });
-
-            // 2. Extract the unique proper names and sort them
-            const sortedCities = Array.from(uniqueMap.values()).sort();
+            // Extract unique cities from your data
+            const uniqueCities = [...new Set(allEvents.map(e => e.city))].filter(Boolean);
             
-            // 3. Populate the dropdown
-            sortedCities.forEach(city => {
+            // Add them to the dropdown
+            uniqueCities.forEach(city => {
                 const opt = document.createElement('option');
                 opt.value = city;
                 opt.textContent = city;
@@ -349,10 +337,7 @@
         window.toggleAuthMode = () => { isSignup = !isSignup; document.getElementById('auth-title').innerText = isSignup ? "Create." : "Join."; };
         window.executeAuth = async () => { const e = document.getElementById('auth-email').value, p = document.getElementById('auth-password').value; try { if(isSignup) await createUserWithEmailAndPassword(auth, e, p); else await signInWithEmailAndPassword(auth, e, p); location.reload(); } catch(e) { alert(e.message); } };
         window.triggerLogout = async () => { await signOut(auth); location.reload(); };
-        v
+        window.filterEvents = () => { const s = document.getElementById('search-input').value.toLowerCase(), l = document.getElementById('location-filter').value; const f = allEvents.filter(e => e.title.toLowerCase().includes(s) && (l === 'all' || e.city === l)); renderEventsGrid(f); };
     </script>
 </body>
 </html>
-
-
-
