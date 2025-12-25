@@ -207,15 +207,28 @@
             allEvents = snap.docs.map(d => ({id: d.id, ...d.data()}));
             
             const select = document.getElementById('location-filter');
-            
-            // 1. Keep the "All Locations" default option
             select.innerHTML = '<option value="all">All Locations</option>';
             
-            // 2. Use a Set to extract UNIQUE city names and filter out any empty values
-            const uniqueCities = [...new Set(allEvents.map(e => e.city))].filter(Boolean);
+            // 1. Create a map to store the 'Proper Name' against a 'lowercase version'
+            // This prevents "Delhi" and "delhi" from appearing twice.
+            const uniqueMap = new Map();
+
+            allEvents.forEach(e => {
+                if (e.city) {
+                    const cleanName = e.city.trim(); // Remove accidental spaces
+                    const lowerName = cleanName.toLowerCase(); // Standardize case
+                    
+                    if (!uniqueMap.has(lowerName)) {
+                        uniqueMap.set(lowerName, cleanName); // Store first version found
+                    }
+                }
+            });
+
+            // 2. Extract the unique proper names and sort them
+            const sortedCities = Array.from(uniqueMap.values()).sort();
             
-            // 3. Alphabetically sort them so the list looks professional
-            uniqueCities.sort().forEach(city => {
+            // 3. Populate the dropdown
+            sortedCities.forEach(city => {
                 const opt = document.createElement('option');
                 opt.value = city;
                 opt.textContent = city;
@@ -340,4 +353,5 @@
     </script>
 </body>
 </html>
+
 
