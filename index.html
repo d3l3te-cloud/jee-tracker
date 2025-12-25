@@ -7,17 +7,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        :root { --brand: #8b5cf6; }
+        :root { --brand: #8b5cf6; --bday: #ec4899; }
         body { font-family: 'Inter', sans-serif; background-color: #000; color: #fff; overflow-x: hidden; }
         h1, h2, h3 { font-family: 'Syne', sans-serif; }
-        .mesh-gradient { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 35%), radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.12) 0%, transparent 35%); z-index: -1; }
+        
+        .mesh-gradient { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.15) 0%, transparent 35%), radial-gradient(circle at 100% 100%, rgba(236, 72, 153, 0.12) 0%, transparent 35%); z-index: -1; transition: background 2s ease; }
+        
+        body.is-birthday-mode { --brand: var(--bday); }
+        .is-birthday-mode .mesh-gradient { background: radial-gradient(circle at 0% 0%, rgba(236, 72, 153, 0.25) 0%, transparent 40%), radial-gradient(circle at 100% 100%, rgba(139, 92, 246, 0.15) 0%, transparent 40%); }
+        .is-birthday-mode .tier-active { border-color: var(--bday) !important; background: rgba(236, 72, 153, 0.1) !important; }
+        .is-birthday-mode #typewriter { border-color: var(--bday) !important; }
+
         .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
         .btn-premium { background: #fff; color: #000; transition: all 0.3s ease; cursor: pointer; border: none; font-weight: 900; text-transform: uppercase; }
         .btn-premium:hover:not(:disabled) { background: var(--brand); color: #fff; box-shadow: 0 0 25px rgba(139, 92, 246, 0.4); }
+        .is-birthday-mode .btn-premium:hover:not(:disabled) { box-shadow: 0 0 25px rgba(236, 72, 153, 0.5); }
 
-        .hero-container { position: relative; min-height: 180px; display: flex; align-items: flex-start; margin-bottom: 2rem; }
+        .birthday-glow { box-shadow: 0 0 30px rgba(236, 72, 153, 0.3); border: 1px solid var(--bday) !important; }
+
+        .hero-container { position: relative; min-height: 120px; display: flex; align-items: flex-start; margin-bottom: 2rem; }
         #typewriter { border-right: 3px solid var(--brand); padding-right: 8px; }
         .cursor-blink { animation: blink 0.8s infinite; }
         @keyframes blink { 0%, 100% { border-color: var(--brand); } 50% { border-color: transparent; } }
@@ -29,12 +40,25 @@
 
         .timer-bar-bg { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
         #timer-bar-fill { width: 0%; height: 100%; background: var(--brand); }
+
+        .is-birthday-mode nav { top: 36px !important; }
+        .is-birthday-mode section { padding-top: 10rem !important; }
+
+        @keyframes banner-glow {
+            0%, 100% { background-color: #ec4899; }
+            50% { background-color: #db2777; }
+        }
+        #top-bday-banner { animation: banner-glow 3s infinite; }
     </style>
 </head>
 <body class="bg-black">
     <div class="mesh-gradient"></div>
 
-    <nav class="fixed top-0 w-full z-[100] bg-black/50 backdrop-blur-lg border-b border-white/5 px-8 py-4 flex justify-between items-center">
+    <div id="top-bday-banner" class="hidden fixed top-0 w-full z-[150] text-white py-2 overflow-hidden text-center">
+        <span id="bday-banner-text" class="text-[10px] font-black uppercase tracking-[0.3em]"></span>
+    </div>
+
+    <nav class="fixed top-0 w-full z-[100] bg-black/50 backdrop-blur-lg border-b border-white/5 px-8 py-4 flex justify-between items-center transition-all duration-300">
         <img src="images/praxiswhite.png" alt="PRAXIS." class="h-8 cursor-pointer" onclick="location.reload()" onerror="this.style.display='none'; this.after('PRAXIS.')">
         <div class="flex items-center gap-6">
             <button id="nav-login-btn" onclick="openAuth()" class="text-[10px] font-bold uppercase tracking-widest">Login</button>
@@ -42,13 +66,11 @@
         </div>
     </nav>
 
-    <section class="pt-40 px-8 max-w-7xl mx-auto">
-        <div class="mb-2 animate-fade-in">
+    <section class="pt-32 px-8 max-w-7xl mx-auto transition-all duration-300">
+        <div class="mb-2">
             <p class="text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] text-white/60">
                 Access Your Passes/Tickets In 
-                <span onclick="openAccount()" class="text-white border-b border-purple-500 cursor-pointer hover:text-purple-400 transition-colors">
-                    ACCOUNT
-                </span> 
+                <span onclick="openAccount()" class="text-white border-b border-purple-500 cursor-pointer hover:text-purple-400 transition-colors">ACCOUNT</span> 
                 section
             </p>
         </div>
@@ -69,10 +91,17 @@
     </section>
 
     <div id="account-panel" class="fixed top-0 right-0 h-full w-full md:w-[450px] bg-black border-l border-white/10 p-10 translate-x-full overflow-y-auto">
-        <div class="flex justify-between items-center mb-10">
+        <div class="flex justify-between items-center mb-6">
             <h2 class="text-3xl font-black italic uppercase">My Vault</h2>
             <button onclick="closeAccount()" class="text-2xl opacity-40 hover:opacity-100">✕</button>
         </div>
+
+        <div class="mb-10 pb-6 border-b border-white/5">
+            <p id="user-display-name" class="text-xl font-bold text-white uppercase tracking-tighter">---</p>
+            <p id="user-display-birthday" class="text-[10px] uppercase tracking-widest text-purple-400 mt-1 opacity-60">---</p>
+            <div id="bday-wish" class="hidden text-[10px] font-black uppercase text-pink-500 mt-2">🎂 Happy Birthday! 10% Discount Active</div>
+        </div>
+
         <h3 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 text-purple-400">Active passes</h3>
         <div id="active-tickets" class="space-y-4 mb-12"></div>
         <div class="border-t border-white/5 pt-8">
@@ -92,6 +121,16 @@
         <div class="glass-card p-10 rounded-[3rem] w-full max-w-md relative text-center">
             <button onclick="closeAuth()" class="absolute top-6 right-8 opacity-50">✕</button>
             <h2 id="auth-title" class="text-4xl font-black mb-8 italic uppercase">Join.</h2>
+            
+            <div id="signup-extra-fields" class="hidden">
+                <input id="auth-name" type="text" placeholder="Full Name" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none focus:border-purple-500 transition">
+                <input id="auth-birthday" type="date" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none focus:border-purple-500 transition text-gray-400">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <input id="auth-city" type="text" placeholder="City" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-purple-500 transition">
+                    <input id="auth-country" type="text" placeholder="Country" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-purple-500 transition">
+                </div>
+            </div>
+
             <input id="auth-email" type="email" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none focus:border-purple-500 transition">
             <input id="auth-password" type="password" placeholder="Password" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-8 outline-none focus:border-purple-500 transition">
             <button onclick="executeAuth()" class="btn-premium w-full py-4 rounded-2xl text-xs">Continue</button>
@@ -100,18 +139,33 @@
     </div>
 
     <div id="booking-overlay" class="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-center justify-center hidden">
-        <div class="glass-card p-10 rounded-[3rem] w-full max-w-lg relative">
+        <div id="booking-card" class="glass-card p-10 rounded-[3rem] w-full max-w-lg relative">
             <button onclick="closeBooking()" class="absolute top-6 right-8 opacity-40">✕</button>
             <div id="step-select">
                 <h2 class="text-3xl font-black italic uppercase mb-2">Reserve Spot</h2>
                 <p id="book-event-name" class="text-purple-400 font-bold uppercase text-[10px] mb-8"></p>
+                
                 <div class="grid grid-cols-2 gap-4 mb-6">
                     <button id="tier-std" onclick="setTier('Standard')" class="p-4 border border-white/10 rounded-2xl text-left tier-active"><b class="block uppercase italic text-[10px]">Standard</b><span class="font-black opacity-60" id="price-std">₹---</span></button>
                     <button id="tier-vip" onclick="setTier('VIP')" class="p-4 border border-white/10 rounded-2xl text-left"><b class="block uppercase italic text-[10px]">VIP Access</b><span class="font-black opacity-60" id="price-vip">₹---</span></button>
                 </div>
+
+                <div class="mb-8">
+                    <p class="text-[10px] font-black uppercase mb-3 opacity-40 tracking-widest">Quantity</p>
+                    <div class="flex items-center gap-6">
+                        <div class="flex items-center glass-card rounded-xl p-1">
+                            <button onclick="updateQty(-1)" class="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-lg font-bold">-</button>
+                            <span id="ticket-qty" class="w-12 text-center font-black text-xl">1</span>
+                            <button onclick="updateQty(1)" class="w-10 h-10 flex items-center justify-center hover:bg-white/5 rounded-lg font-bold">+</button>
+                        </div>
+                        <span id="bday-tag" class="hidden text-[10px] bg-pink-500 text-white px-3 py-1.5 rounded-full font-black uppercase animate-pulse">Birthday 10% OFF</span>
+                    </div>
+                </div>
+
                 <input id="verify-email-input" type="email" placeholder="Verification Email" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-6 outline-none">
                 <button onclick="sendBookingOTP()" class="btn-premium w-full py-4 rounded-2xl text-xs">Send OTP</button>
             </div>
+
             <div id="step-verify" class="hidden text-center">
                 <h2 class="text-3xl font-black italic uppercase mb-4">Verify OTP</h2>
                 <p class="text-[10px] uppercase tracking-widest opacity-40 mb-6">Expires in: <span id="otp-expiry" class="text-white">05:00</span></p>
@@ -148,7 +202,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyBDcvXVhv-hn0lTrIxfjrPlp2B5N0Vk_As", authDomain: "praxis-tickets.firebaseapp.com", projectId: "praxis-tickets", storageBucket: "praxis-tickets.firebasestorage.app", messagingSenderId: "865044869844", appId: "1:865044869844:web:7fe4fc422d158f5c2c0141" };
         const app = initializeApp(firebaseConfig);
@@ -158,6 +212,7 @@
         emailjs.init("A9gvj50d9xfwuaCq_");
 
         let activeBooking = {}, allEvents = [], generatedOTP = null, isSignup = false, currentOpenTicketId = null, unsubscribeVault = null, barAnimReq = null, otpExpiryTimer = null;
+        let userProfile = null, bookingQty = 1;
 
         const phrases = ["Live Now.", "Buy Now.", "Feel Now."];
         let i = 0, j = 0, isDeleting = false;
@@ -171,9 +226,36 @@
         }
         type();
 
-        onAuthStateChanged(auth, (user) => {
+        function triggerBdaySurprise() {
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#ec4899', '#8b5cf6', '#ffffff'] });
+            setTimeout(() => {
+                confetti({ particleCount: 100, spread: 100, origin: { y: 0.7 }, colors: ['#ec4899', '#ffffff'] });
+            }, 1000);
+        }
+
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
                 if (user.email === "admin@praxis.co") window.location.replace("admin.html");
+                
+                const uDoc = await getDoc(doc(db, "users", user.uid));
+                if(uDoc.exists()) {
+                    userProfile = uDoc.data();
+                    document.getElementById('user-display-name').innerText = userProfile.name;
+                    document.getElementById('user-display-birthday').innerText = `DOB: ${userProfile.birthday}`;
+                    
+                    const today = new Date();
+                    const bday = new Date(userProfile.birthday);
+                    if(today.getDate() === bday.getDate() && today.getMonth() === bday.getMonth()) {
+                        userProfile.isBirthday = true;
+                        document.getElementById('bday-banner-text').innerText = `🎉 Happy Birthday ${userProfile.name}! Enjoy 10% Off All Experiences today 🎂`;
+                        document.getElementById('top-bday-banner').classList.remove('hidden');
+                        document.body.classList.add('is-birthday-mode');
+                        document.getElementById('bday-wish').classList.remove('hidden');
+                        document.getElementById('bday-tag').classList.remove('hidden');
+                        triggerBdaySurprise();
+                    }
+                }
+
                 document.getElementById('nav-login-btn').classList.add('hidden');
                 document.getElementById('nav-acc-btn').classList.remove('hidden');
                 setupVaultListener(user.uid);
@@ -198,7 +280,7 @@
                         const card = document.createElement('div');
                         card.className = "glass-card p-5 rounded-3xl flex justify-between items-center cursor-pointer hover:border-purple-500 transition";
                         card.onclick = () => openQR(tid);
-                        card.innerHTML = `<div><p class="font-black text-xs uppercase italic">${t.eventName}</p><p class="text-[8px] font-black uppercase text-purple-500 mt-1">AVAILABLE • ₹${t.price}</p></div><div id="sm-${tid}" class="bg-white p-1 rounded-lg"></div>`;
+                        card.innerHTML = `<div><p class="font-black text-xs uppercase italic">${t.eventName}</p><p class="text-[8px] font-black uppercase text-purple-500 mt-1">${t.remainingEntries} / ${t.totalEntries} ENTRIES LEFT</p></div><div id="sm-${tid}" class="bg-white p-1 rounded-lg"></div>`;
                         activeDiv.appendChild(card);
                         new QRCode(document.getElementById(`sm-${tid}`), { text: tid, width: 35, height: 35 });
                     }
@@ -210,28 +292,17 @@
             });
         }
 
-        // --- FIXED LOAD EVENTS TO POPULATE DROPDOWN ---
         async function loadEvents() {
             const snap = await getDocs(collection(db, "events"));
             allEvents = snap.docs.map(d => ({id: d.id, ...d.data()}));
-            
-            // Get the select element
             const select = document.getElementById('location-filter');
-            
-            // Clear existing except the first "All Locations"
             select.innerHTML = '<option value="all">All Locations</option>';
-            
-            // Extract unique cities from your data
             const uniqueCities = [...new Set(allEvents.map(e => e.city))].filter(Boolean);
-            
-            // Add them to the dropdown
             uniqueCities.forEach(city => {
                 const opt = document.createElement('option');
-                opt.value = city;
-                opt.textContent = city;
+                opt.value = city; opt.textContent = city;
                 select.appendChild(opt);
             });
-
             renderEventsGrid(allEvents);
         }
 
@@ -239,10 +310,8 @@
             const grid = document.getElementById('events-grid');
             grid.innerHTML = '';
             data.forEach(ev => {
-                // IMAGE PATH FIX: Prepend "images/" to name if only filename exists
                 const rawImg = ev.image || '';
                 const imgUrl = rawImg.includes('/') ? rawImg : `images/${rawImg}`;
-                
                 grid.innerHTML += `<div class="glass-card p-6 rounded-[2.5rem] group overflow-hidden">
                     <div class="overflow-hidden rounded-3xl h-56 mb-6">
                         <img src="${imgUrl}" onerror="this.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30'" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition duration-500">
@@ -277,36 +346,23 @@
             } catch(e) { alert("OTP service failed"); }
         };
 
-        // SMOOTH OTP TIMER (60fps)
         function startTimers() {
             if(barAnimReq) cancelAnimationFrame(barAnimReq);
             clearInterval(otpExpiryTimer);
-            
             const resendBtn = document.getElementById('resend-otp-btn');
             const bar = document.getElementById('timer-bar-fill');
             const expiryText = document.getElementById('otp-expiry');
-            
             resendBtn.disabled = true;
             resendBtn.classList.add('opacity-30', 'cursor-not-allowed');
-
-            let startTime = Date.now();
-            let duration = 60000; // 60 seconds
-
+            let startTime = Date.now(), duration = 60000;
             function updateBar() {
                 let elapsed = Date.now() - startTime;
                 let progress = Math.min((elapsed / duration) * 100, 100);
                 bar.style.width = progress + "%";
-                
-                if (progress < 100) {
-                    barAnimReq = requestAnimationFrame(updateBar);
-                } else {
-                    resendBtn.disabled = false;
-                    resendBtn.classList.remove('opacity-30', 'cursor-not-allowed');
-                    resendBtn.classList.add('opacity-100');
-                }
+                if (progress < 100) barAnimReq = requestAnimationFrame(updateBar);
+                else { resendBtn.disabled = false; resendBtn.classList.remove('opacity-30', 'cursor-not-allowed'); resendBtn.classList.add('opacity-100'); }
             }
             barAnimReq = requestAnimationFrame(updateBar);
-
             let expirySec = 300;
             otpExpiryTimer = setInterval(() => {
                 expirySec--;
@@ -316,22 +372,58 @@
             }, 1000);
         }
 
+        window.updateQty = (val) => {
+            bookingQty = Math.max(1, bookingQty + val);
+            document.getElementById('ticket-qty').innerText = bookingQty;
+        };
+
         window.bookNow = (id) => {
             if(!auth.currentUser) return openAuth();
             const ev = allEvents.find(e => e.id === id);
+            bookingQty = 1; document.getElementById('ticket-qty').innerText = "1";
             activeBooking = { id: ev.id, title: ev.title, prices: ev.prices || { standard: 3999, vip: 9999 }, tier: 'Standard' };
-            activeBooking.price = activeBooking.prices.standard;
+            
+            let sPrice = activeBooking.prices.standard;
+            let vPrice = activeBooking.prices.vip;
+            
+            if(userProfile?.isBirthday) {
+                sPrice = Math.floor(sPrice * 0.9);
+                vPrice = Math.floor(vPrice * 0.9);
+                document.getElementById('booking-card').classList.add('birthday-glow');
+            } else {
+                document.getElementById('booking-card').classList.remove('birthday-glow');
+            }
+            
+            activeBooking.currentStandard = sPrice;
+            activeBooking.currentVip = vPrice;
+            activeBooking.price = sPrice;
+            
             document.getElementById('book-event-name').innerText = ev.title;
-            document.getElementById('price-std').innerText = `₹${activeBooking.prices.standard}`;
-            document.getElementById('price-vip').innerText = `₹${activeBooking.prices.vip}`;
+            document.getElementById('price-std').innerText = `₹${sPrice}`;
+            document.getElementById('price-vip').innerText = `₹${vPrice}`;
             document.getElementById('booking-overlay').classList.remove('hidden');
             showStep(1);
         };
 
         window.confirmFinalBooking = async () => {
             if(document.getElementById('otp-input').value != generatedOTP) return alert("Wrong OTP");
-            await addDoc(collection(db, "tickets"), { userId: auth.currentUser.uid, buyerEmail: auth.currentUser.email, eventName: activeBooking.title, eventDocId: activeBooking.id, tier: activeBooking.tier, price: activeBooking.price, status: "pending", isUsed: false, timestamp: Date.now() });
-            alert("Requested!"); location.reload();
+            
+            await addDoc(collection(db, "tickets"), { 
+                userId: auth.currentUser.uid, 
+                buyerEmail: auth.currentUser.email, 
+                buyerName: userProfile.name,
+                eventName: activeBooking.title, 
+                eventDocId: activeBooking.id, 
+                tier: activeBooking.tier, 
+                price: activeBooking.price, 
+                status: "pending", 
+                isUsed: false,
+                totalEntries: bookingQty,
+                remainingEntries: bookingQty,
+                timestamp: Date.now() 
+            });
+            alert(`Your pass for ${bookingQty} entries has been created!`); 
+            location.reload();
         };
 
         window.openQR = (tid) => { currentOpenTicketId = tid; const box = document.getElementById('zoom-qr-box'); box.innerHTML = ''; document.getElementById('qr-modal').classList.remove('hidden'); setTimeout(() => { new QRCode(box, { text: tid, width: 220, height: 220 }); }, 200); };
@@ -342,13 +434,37 @@
         window.closeAccount = () => document.getElementById('account-panel').classList.add('translate-x-full');
         window.closeBooking = () => document.getElementById('booking-overlay').classList.add('hidden');
         window.showStep = (s) => { document.getElementById('step-select').classList.toggle('hidden', s !== 1); document.getElementById('step-verify').classList.toggle('hidden', s !== 2); };
-        window.setTier = (t) => { activeBooking.tier = t; activeBooking.price = t === 'Standard' ? activeBooking.prices.standard : activeBooking.prices.vip; document.getElementById('tier-std').classList.toggle('tier-active', t === 'Standard'); document.getElementById('tier-vip').classList.toggle('tier-active', t === 'VIP'); };
-        window.toggleAuthMode = () => { isSignup = !isSignup; document.getElementById('auth-title').innerText = isSignup ? "Create." : "Join."; };
-        window.executeAuth = async () => { const e = document.getElementById('auth-email').value, p = document.getElementById('auth-password').value; try { if(isSignup) await createUserWithEmailAndPassword(auth, e, p); else await signInWithEmailAndPassword(auth, e, p); location.reload(); } catch(e) { alert(e.message); } };
+        window.setTier = (t) => { 
+            activeBooking.tier = t; 
+            activeBooking.price = t === 'Standard' ? activeBooking.currentStandard : activeBooking.currentVip; 
+            document.getElementById('tier-std').classList.toggle('tier-active', t === 'Standard'); 
+            document.getElementById('tier-vip').classList.toggle('tier-active', t === 'VIP'); 
+        };
+        window.toggleAuthMode = () => { 
+            isSignup = !isSignup; 
+            document.getElementById('auth-title').innerText = isSignup ? "Create." : "Join."; 
+            document.getElementById('signup-extra-fields').classList.toggle('hidden', !isSignup);
+        };
+        window.executeAuth = async () => { 
+            const e = document.getElementById('auth-email').value, p = document.getElementById('auth-password').value; 
+            try { 
+                if(isSignup) {
+                    const res = await createUserWithEmailAndPassword(auth, e, p);
+                    await setDoc(doc(db, "users", res.user.uid), { 
+                        uid: res.user.uid,
+                        name: document.getElementById('auth-name').value, 
+                        birthday: document.getElementById('auth-birthday').value,
+                        city: document.getElementById('auth-city').value,
+                        country: document.getElementById('auth-country').value,
+                        email: e,
+                        createdAt: Date.now()
+                    });
+                } else await signInWithEmailAndPassword(auth, e, p); 
+                location.reload(); 
+            } catch(e) { alert(e.message); } 
+        };
         window.triggerLogout = async () => { await signOut(auth); location.reload(); };
         window.filterEvents = () => { const s = document.getElementById('search-input').value.toLowerCase(), l = document.getElementById('location-filter').value; const f = allEvents.filter(e => e.title.toLowerCase().includes(s) && (l === 'all' || e.city === l)); renderEventsGrid(f); };
     </script>
 </body>
 </html>
-
-
