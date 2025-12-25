@@ -206,17 +206,16 @@
             const snap = await getDocs(collection(db, "events"));
             allEvents = snap.docs.map(d => ({id: d.id, ...d.data()}));
             
-            // Get the select element
             const select = document.getElementById('location-filter');
             
-            // Clear existing except the first "All Locations"
+            // 1. Keep the "All Locations" default option
             select.innerHTML = '<option value="all">All Locations</option>';
             
-            // Extract unique cities from your data
+            // 2. Use a Set to extract UNIQUE city names and filter out any empty values
             const uniqueCities = [...new Set(allEvents.map(e => e.city))].filter(Boolean);
             
-            // Add them to the dropdown
-            uniqueCities.forEach(city => {
+            // 3. Alphabetically sort them so the list looks professional
+            uniqueCities.sort().forEach(city => {
                 const opt = document.createElement('option');
                 opt.value = city;
                 opt.textContent = city;
@@ -341,3 +340,4 @@
     </script>
 </body>
 </html>
+
