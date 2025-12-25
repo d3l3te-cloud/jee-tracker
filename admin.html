@@ -84,4 +84,201 @@
             <div class="lg:col-span-3 space-y-10">
                 <div class="glass p-8 rounded-[3rem]">
                     <div class="flex justify-between items-center mb-8">
-                        <h2 class="text-xl font-black uppercase italic
+                        <h2 class="text-xl font-black uppercase italic">Pending Verification</h2>
+                    </div>
+                    <div id="ticket-list" class="space-y-4 max-h-[400px] overflow-y-auto pr-4 custom-scroll"></div>
+                </div>
+
+                <div class="glass p-8 rounded-[3rem]">
+                    <h2 class="text-xl font-black uppercase italic mb-8">Show Performance</h2>
+                    <div id="show-analytics" class="space-y-4 max-h-[400px] overflow-y-auto pr-4 custom-scroll"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, increment, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const config = {
+            apiKey: "AIzaSyBDcvXVhv-hn0lTrIxfjrPlp2B5N0Vk_As",
+            authDomain: "praxis-tickets.firebaseapp.com",
+            projectId: "praxis-tickets",
+            storageBucket: "praxis-tickets.firebasestorage.app",
+            messagingSenderId: "865044869844",
+            appId: "1:865044869844:web:7fe4fc422d158f5c2c0141"
+        };
+        const app = initializeApp(config);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        emailjs.init("A9gvj50d9xfwuaCq_");
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user || user.email !== "admin@praxis.co") {
+                window.location.replace("index.html");
+            } else {
+                loadStats();
+                loadPending();
+                loadShowAnalytics();
+            }
+        });
+
+        window.adminSignOut = async () => {
+            await signOut(auth);
+            window.location.replace("index.html");
+        };
+
+        window.publishShow = async () => {
+            const data = {
+                title: document.getElementById('title').value,
+                city: document.getElementById('city').value,
+                image: document.getElementById('img').value,
+                showTime: document.getElementById('time').value,
+                maxTickets: Number(document.getElementById('max').value),
+                ticketCount: 0,
+                prices: { 
+                    standard: Number(document.getElementById('p-std').value || 3999), 
+                    vip: Number(document.getElementById('p-vip').value || 8999) 
+                }
+            };
+            if(!data.title || !data.image) return alert("Fields missing");
+            await addDoc(collection(db, "events"), data);
+            alert("Experience is now Live!"); 
+            location.reload();
+        };
+
+        async function loadStats() {
+            const allTickets = await getDocs(collection(db, "tickets"));
+            let totalRev = 0, totalGuests = 0, pending = 0;
+            allTickets.forEach(d => {
+                const t = d.data();
+                if(t.status === "approved") {
+                    totalRev += (t.price || 0);
+                    // COUNT TOTAL PEOPLE/ENTRIES NOT JUST DOCUMENTS
+                    totalGuests += (t.totalEntries || 1);
+                } else if (t.status === "pending") {
+                    pending++;
+                }
+            });
+            document.getElementById('total-revenue').innerText = `₹${totalRev.toLocaleString()}`;
+            document.getElementById('approved-count').innerText = totalGuests;
+            document.getElementById('pending-count').innerText = pending;
+        }
+
+        async function loadPending() {
+            const q = query(collection(db, "tickets"), where("status", "==", "pending"));
+            const snap = await getDocs(q);
+            const list = document.getElementById('ticket-list'); 
+            list.innerHTML = snap.empty ? `<div class="text-center py-10 opacity-20 text-xs font-bold uppercase tracking-widest">Inbox Empty</div>` : '';
+
+            snap.forEach(d => {
+                const t = d.data();
+                list.innerHTML += `
+                    <div class="glass p-6 rounded-3xl flex justify-between items-center border border-white/5">
+                        <div class="text-[10px] uppercase">
+                            <p class="font-black text-sm italic tracking-tight mb-1 text-purple-400">${t.eventName}</p>
+                            <p class="opacity-60 mb-1 font-bold">Buyer: ${t.buyerEmail}</p>
+                            <div class="flex gap-2 items-center">
+                                <p class="opacity-30">Tier: ${t.tier} • ₹${t.price}</p>
+                                <span class="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full font-black">${t.totalEntries || 1} PEOPLE</span>
+                            </div>
+                        </div>
+                        <button onclick="approve('${d.id}', '${t.eventDocId}', ${t.totalEntries || 1})" class="bg-white text-black px-6 py-3 rounded-xl text-[10px] font-black hover:bg-purple-500 hover:text-white transition-all">APPROVE</button>
+                    </div>`;
+            });
+        }
+
+        async function loadShowAnalytics() {
+            const eventsSnap = await getDocs(collection(db, "events"));
+            const ticketsSnap = await getDocs(collection(db, "tickets"));
+            const container = document.getElementById('show-analytics');
+            container.innerHTML = '';
+
+            eventsSnap.forEach(evDoc => {
+                const ev = evDoc.data();
+                const eid = evDoc.id;
+                let peopleSold = 0, rev = 0;
+
+                ticketsSnap.forEach(tkDoc => {
+                    const tk = tkDoc.data();
+                    if(tk.eventDocId === eid && tk.status === "approved") {
+                        peopleSold += (tk.totalEntries || 1);
+                        rev += (tk.price || 0);
+                    }
+                });
+
+                const utilPercent = Math.round((peopleSold / ev.maxTickets) * 100) || 0;
+
+                container.innerHTML += `
+                    <div class="glass p-6 rounded-3xl border border-white/5">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 class="font-black italic uppercase text-sm">${ev.title}</h4>
+                                <p class="text-[9px] opacity-40 uppercase font-bold">${ev.city} • ${ev.showTime}</p>
+                            </div>
+                            <button onclick="deleteShow('${eid}', '${ev.title}')" class="text-red-500 text-[9px] font-black uppercase hover:underline">Delete & Refund</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <p class="text-[8px] opacity-30 uppercase font-bold">Guests Confirmed</p>
+                                <p class="text-lg font-black italic">${peopleSold} / ${ev.maxTickets}</p>
+                            </div>
+                            <div>
+                                <p class="text-[8px] opacity-30 uppercase font-bold">Revenue</p>
+                                <p class="text-lg font-black italic text-purple-400">₹${rev.toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p class="text-[8px] opacity-30 uppercase font-bold">Utilization</p>
+                                <p class="text-lg font-black italic">${utilPercent}%</p>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        window.approve = async (tid, eid, qty) => {
+            await updateDoc(doc(db, "tickets", tid), { status: "approved" });
+            // INCREMENT BY QUANTITY OF PEOPLE, NOT JUST 1
+            await updateDoc(doc(db, "events", eid), { ticketCount: increment(qty) });
+            alert("Confirmed!");
+            location.reload();
+        };
+
+        window.deleteShow = async (eid, eventTitle) => {
+            if(!confirm(`CAUTION: This will delete "${eventTitle}", cancel all associated tickets, and notify buyers. Proceed?`)) return;
+            
+            const q = query(collection(db, "tickets"), where("eventDocId", "==", eid));
+            const snap = await getDocs(q);
+            const batch = writeBatch(db);
+
+            const emailPromises = [];
+            snap.forEach(d => {
+                const t = d.data();
+                emailPromises.push(
+                    emailjs.send("service_ctg57ig", "template_cancellation", {
+                        to_email: t.buyerEmail,
+                        event_name: eventTitle,
+                        refund_amount: `₹${t.price}`
+                    })
+                );
+                batch.delete(doc(db, "tickets", d.id));
+            });
+
+            batch.delete(doc(db, "events", eid));
+
+            try {
+                await Promise.all(emailPromises);
+                await batch.commit();
+                alert("Show Deleted. Cancellation emails sent to all buyers.");
+                location.reload();
+            } catch(e) {
+                alert("Error during refund process: " + e.message);
+            }
+        };
+    </script>
+</body>
+</html>
+
