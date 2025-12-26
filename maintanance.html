@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRAXIS — Maintenance</title>
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syne:wght@800&display=swap" rel="stylesheet">
+
+<style>
+/* ---------- RESET ---------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+/* ---------- BODY ---------- */
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background:
+    radial-gradient(800px 400px at 20% 10%, rgba(140, 92, 246, 0.15), transparent),
+    radial-gradient(600px 300px at 80% 90%, rgba(236, 72, 153, 0.15), transparent),
+    #020202;
+  color: #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ---------- WRAPPER ---------- */
+.wrapper {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ---------- CARD ---------- */
+.card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 32px 28px 36px;
+  backdrop-filter: blur(20px);
+  text-align: center;
+}
+
+/* ---------- BRAND ---------- */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.brand img {
+  width: 28px;
+  height: 28px;
+}
+
+.brand span {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 14px;
+}
+
+/* ---------- STATUS ---------- */
+.status-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  animation: pulse 1.4s infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.4; }
+}
+
+/* ---------- HEADING ---------- */
+h1 {
+  font-size: clamp(1.6rem, 6vw, 2.2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+/* ---------- TEXT ---------- */
+p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #a1a1aa;
+  margin-bottom: 32px;
+}
+
+/* ---------- FOOTER ---------- */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 20px;
+}
+
+.footer span {
+  display: block;
+  color: #f4f4f5;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 360px) {
+  .card {
+    padding: 28px 20px 32px;
+  }
+}
+</style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="card">
+
+      <!-- Brand -->
+      <div class="brand">
+        <img src="images/praxiswhite.png" alt="PRAXIS Logo">
+        <span>PRAXIS.</span>
+      </div>
+
+      <!-- Status -->
+      <div class="status-wrapper">
+        <div class="status">
+          <span class="status-dot"></span>
+          Systems Offline
+        </div>
+      </div>
+
+      <!-- Content -->
+      <h1>We’ll be right back</h1>
+      <p>
+        We’re performing scheduled maintenance to improve performance
+        and reliability. Thank you for your patience.
+      </p>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div>
+          Est. time
+          <span>~ TBD</span>
+        </div>
+        <div style="text-align:right">
+          Contact
+          <span>quizzo2k25@gmail.com</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
