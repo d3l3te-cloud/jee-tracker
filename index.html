@@ -112,6 +112,7 @@
             <h3 class="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-40">All Purchases</h3>
             <div id="history-tickets" class="space-y-4 mb-10"></div>
         </div>
+        <button onclick="deleteMyAccount()" class="w-full py-4 mb-2 border border-white/5 text-white/30 text-[9px] font-black uppercase rounded-2xl hover:bg-red-900/20 hover:text-red-500 transition">Delete Account & Data</button>
         <button onclick="triggerLogout()" class="w-full py-4 border border-red-500/20 text-red-500 text-[10px] font-black uppercase rounded-2xl hover:bg-red-500/10 transition">Sign Out</button>
     </div>
 
@@ -136,7 +137,10 @@
             </div>
 
             <input id="auth-email" type="email" placeholder="Email" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-4 outline-none focus:border-purple-500 transition">
-            <input id="auth-password" type="password" placeholder="Password" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-8 outline-none focus:border-purple-500 transition">
+            <input id="auth-password" type="password" placeholder="Password" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-2 outline-none focus:border-purple-500 transition">
+            
+            <button onclick="resetPassword()" class="text-[9px] opacity-40 uppercase mb-8 hover:opacity-100 transition">Forgot Password?</button>
+
             <button onclick="executeAuth()" class="btn-premium w-full py-4 rounded-2xl text-xs">Continue</button>
             <button onclick="toggleAuthMode()" id="toggle-btn" class="text-[10px] opacity-40 uppercase mt-6 block w-full tracking-widest">Need an account?</button>
         </div>
@@ -205,8 +209,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, onSnapshot, doc, setDoc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyBDcvXVhv-hn0lTrIxfjrPlp2B5N0Vk_As", authDomain: "praxis-tickets.firebaseapp.com", projectId: "praxis-tickets", storageBucket: "praxis-tickets.firebasestorage.app", messagingSenderId: "865044869844", appId: "1:865044869844:web:7fe4fc422d158f5c2c0141" };
         const app = initializeApp(firebaseConfig);
@@ -218,6 +222,7 @@
         let activeBooking = {}, allEvents = [], generatedOTP = null, isSignup = false, currentOpenTicketId = null, unsubscribeVault = null, barAnimReq = null, otpExpiryTimer = null;
         let userProfile = null, bookingQty = 1;
 
+        // TYPEWRITER
         const phrases = ["Live Now.", "Buy Now.", "Feel Now."];
         let i = 0, j = 0, isDeleting = false;
         function type() {
@@ -238,6 +243,7 @@
             }, 1000);
         }
 
+        // AUTH LISTENER
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 if (user.email === "admin@praxis.co") window.location.replace("admin.html");
@@ -273,6 +279,40 @@
             loadEvents();
         });
 
+        // NEW: PASSWORD RESET
+        window.resetPassword = async () => {
+            const email = document.getElementById('auth-email').value;
+            if(!email) return alert("Please enter your email address first.");
+            try {
+                await sendPasswordResetEmail(auth, email);
+                alert("Password reset link sent to your email!");
+            } catch(e) { alert(e.message); }
+        };
+
+        // NEW: ACCOUNT DELETION
+        window.deleteMyAccount = async () => {
+            if(!confirm("Are you sure? This will delete your profile and all ticket history permanently. This action cannot be undone.")) return;
+            const password = prompt("For security, please enter your password to confirm deletion:");
+            if(!password) return;
+
+            try {
+                const user = auth.currentUser;
+                const credential = EmailAuthProvider.credential(user.email, password);
+                await reauthenticateWithCredential(user, credential);
+                
+                // Delete Firestore Profile
+                await deleteDoc(doc(db, "users", user.uid));
+                // Delete Firebase Auth User
+                await deleteUser(user);
+                alert("Account and data deleted successfully.");
+                location.reload();
+            } catch(e) { 
+                alert("Authentication failed. Incorrect password or error occurred."); 
+                console.error(e);
+            }
+        };
+
+        // VAULT LISTENER & CANCELLATION
         function setupVaultListener(uid) {
             const q = query(collection(db, "tickets"), where("userId", "==", uid));
             unsubscribeVault = onSnapshot(q, (snap) => {
@@ -282,6 +322,8 @@
                 snap.forEach(d => {
                     const t = d.data(), tid = d.id;
                     if(tid === currentOpenTicketId && t.isUsed) closeQRModal();
+                    
+                    // Display Active Approved Tickets
                     if (t.status === 'approved' && !t.isUsed) {
                         const card = document.createElement('div');
                         card.className = "glass-card p-5 rounded-3xl flex justify-between items-center cursor-pointer hover:border-purple-500 transition";
@@ -290,14 +332,62 @@
                         activeDiv.appendChild(card);
                         new QRCode(document.getElementById(`sm-${tid}`), { text: tid, width: 35, height: 35 });
                     }
+
+                    // Display Ticket History with Cancellation option
                     const hCard = document.createElement('div');
-                    hCard.className = "glass-card history-card p-5 rounded-3xl flex justify-between items-center";
-                    hCard.innerHTML = `<div><p class="font-black text-xs uppercase italic">${t.eventName}</p><p class="text-[7px] font-bold uppercase mt-1 opacity-60">${t.isUsed ? "USED" : t.status.toUpperCase()} • ₹${t.price}</p></div>`;
+                    const canCancel = t.status === 'pending';
+                    hCard.className = "glass-card history-card p-5 rounded-3xl flex justify-between items-center mb-3";
+                    hCard.innerHTML = `
+                        <div>
+                            <p class="font-black text-xs uppercase italic">${t.eventName}</p>
+                            <p class="text-[7px] font-bold uppercase mt-1 opacity-60">${t.isUsed ? "USED" : t.status.toUpperCase()} • ₹${t.price}</p>
+                        </div>
+                        ${canCancel ? `<button onclick="cancelTicket('${tid}')" class="text-[8px] font-black text-red-500 border border-red-500/20 px-3 py-1 rounded-full hover:bg-red-500/10">CANCEL</button>` : ''}
+                    `;
                     historyDiv.appendChild(hCard);
                 });
             });
         }
 
+        // NEW: CANCEL TICKET
+        window.cancelTicket = async (tid) => {
+        // 1. Get Ticket Data first to show refund info
+        const tDoc = await getDoc(doc(db, "tickets", tid));
+        if (!tDoc.exists()) return;
+        const ticket = tDoc.data();
+
+        let confirmMsg = "";
+        if (ticket.status === 'pending') {
+            confirmMsg = "Cancel this pending request?";
+        } else if (ticket.status === 'approved') {
+            const refundAmount = (ticket.price * 0.7).toFixed(2);
+            confirmMsg = `This ticket is confirmed. \n\nPolicy: 70% Refund (₹${refundAmount}) will be processed after Admin approval. \n\nDo you wish to proceed?`;
+        } else {
+            return alert("This ticket cannot be cancelled.");
+        }
+
+        if(!confirm(confirmMsg)) return;
+
+        try {
+            // 2. Update status to 'cancel_requested' in Firestore
+            // This makes it appear in the Admin's "Refund Queue"
+            await updateDoc(doc(db, "tickets", tid), { 
+                status: 'cancel_requested',
+                refundAmount: ticket.price * 0.7,
+                cancelTimestamp: Date.now()
+            });
+
+            // EMAIL BLOCK REMOVED FROM HERE
+            // It will now be sent by the Admin Dashboard instead.
+
+            alert("Cancellation request sent! Please wait for Admin to process your 70% refund.");
+        } catch(e) { 
+            console.error(e);
+            alert("Error: " + e.message); 
+        }
+    };
+
+        // EVENTS LOADING
         async function loadEvents() {
             const snap = await getDocs(collection(db, "events"));
             allEvents = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -341,6 +431,7 @@
             });
         }
 
+        // OTP & BOOKING
         window.sendBookingOTP = async () => {
             const email = document.getElementById('verify-email-input').value;
             if(!email.includes('@')) return alert("Invalid Email");
@@ -443,6 +534,7 @@
             }
         };
 
+        // NAVIGATION & UI WRAPPERS
         window.openQR = (tid) => { currentOpenTicketId = tid; const box = document.getElementById('zoom-qr-box'); box.innerHTML = ''; document.getElementById('qr-modal').classList.remove('hidden'); setTimeout(() => { new QRCode(box, { text: tid, width: 220, height: 220 }); }, 200); };
         window.closeQRModal = () => { currentOpenTicketId = null; document.getElementById('qr-modal').classList.add('hidden'); };
         window.openAuth = () => document.getElementById('auth-modal').classList.remove('hidden');
