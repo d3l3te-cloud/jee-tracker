@@ -238,6 +238,7 @@
                 await emailjs.send("service_ctg57ig", "template_cancellation", { 
                     to_email: email, 
                     event_name: eventName, 
+                    ticket_qty: qty,
                     refund_amount: `₹${Number(refundAmt).toLocaleString()}`,
                     cancellation_reason: "due to ticket cancellation from your side",
                     apology_clause: "" 
@@ -324,7 +325,8 @@
                     emailjs.send("service_ctg57ig", "template_cancellation", {
                         to_email: t.buyerEmail,
                         event_name: eventTitle,
-                        refund_amount: `₹${t.price}`,
+                        ticket_qty: t.totalEntries || 1,
+                        refund_amount: `₹${t.price.toLocaleString()}`,
                         cancellation_reason: "due to unforeseen circumstances",
                         apology_clause: "We apologize for any inconvenience this may cause."
                     })
