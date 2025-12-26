@@ -22,7 +22,7 @@
         .is-birthday-mode #typewriter { border-color: var(--bday) !important; }
 
         .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .btn-premium { background: #fff; color: #000; transition: all 0.3s ease; cursor: pointer; border: none; font-weight: 900; text-transform: uppercase; }
+        .btn-premium { background: #fff; color: #000; transition: all 0.3s ease; cursor: pointer; border: none; font-weight: 900; text-transform: uppercase; touch-action: manipulation; }
         .btn-premium:hover:not(:disabled) { background: var(--brand); color: #fff; box-shadow: 0 0 25px rgba(139, 92, 246, 0.4); }
         .is-birthday-mode .btn-premium:hover:not(:disabled) { box-shadow: 0 0 25px rgba(236, 72, 153, 0.5); }
 
@@ -43,6 +43,9 @@
 
         .is-birthday-mode nav { top: 36px !important; }
         .is-birthday-mode section { padding-top: 10rem !important; }
+
+        /* Mobile specific fixes */
+        #booking-card { max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
         @keyframes banner-glow {
             0%, 100% { background-color: #ec4899; }
@@ -140,7 +143,7 @@
     </div>
 
     <div id="booking-overlay" class="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-center justify-center hidden">
-        <div id="booking-card" class="glass-card p-10 rounded-[3rem] w-full max-w-lg relative">
+        <div id="booking-card" class="glass-card p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] w-[90%] max-w-lg relative">
             <button onclick="closeBooking()" class="absolute top-6 right-8 opacity-40">✕</button>
             <div id="step-select">
                 <h2 class="text-3xl font-black italic uppercase mb-2">Reserve Spot</h2>
@@ -170,10 +173,10 @@
             <div id="step-verify" class="hidden text-center">
                 <h2 class="text-3xl font-black italic uppercase mb-4">Verify OTP</h2>
                 <p class="text-[10px] uppercase tracking-widest opacity-40 mb-6">Expires in: <span id="otp-expiry" class="text-white">05:00</span></p>
-                <input id="otp-input" type="text" placeholder="000000" maxlength="6" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-6 mb-6 text-center text-4xl font-black tracking-widest outline-none">
+                <input id="otp-input" type="number" pattern="\d*" placeholder="000000" class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-6 mb-6 text-center text-4xl font-black tracking-widest outline-none">
                 <button id="resend-otp-btn" disabled onclick="sendBookingOTP()" class="w-full text-[10px] uppercase font-black opacity-30 cursor-not-allowed mb-2">Resend OTP</button>
                 <div class="timer-bar-bg"><div id="timer-bar-fill"></div></div>
-                <button onclick="confirmFinalBooking()" class="btn-premium w-full py-4 rounded-2xl text-xs mt-8">Complete Booking</button>
+                <button id="final-confirm-btn" onclick="confirmFinalBooking()" ontouchstart="" class="btn-premium w-full py-4 rounded-2xl text-xs mt-8">Complete Booking</button>
             </div>
         </div>
     </div>
@@ -220,7 +223,8 @@
         function type() {
             const current = phrases[i];
             const display = isDeleting ? current.substring(0, j--) : current.substring(0, j++);
-            document.getElementById('typewriter').textContent = display;
+            const el = document.getElementById('typewriter');
+            if(el) el.textContent = display;
             if(!isDeleting && j === current.length+1){ isDeleting = true; setTimeout(type, 2000); }
             else if(isDeleting && j === 0){ isDeleting = false; i = (i+1)%phrases.length; setTimeout(type, 500); }
             else { setTimeout(type, isDeleting ? 40 : 80); }
@@ -408,24 +412,35 @@
         };
 
         window.confirmFinalBooking = async () => {
-            if(document.getElementById('otp-input').value != generatedOTP) return alert("Wrong OTP");
+            const inputVal = document.getElementById('otp-input').value;
+            if(inputVal != generatedOTP) return alert("Wrong OTP");
             
-            await addDoc(collection(db, "tickets"), { 
-                userId: auth.currentUser.uid, 
-                buyerEmail: auth.currentUser.email, 
-                buyerName: userProfile.name,
-                eventName: activeBooking.title, 
-                eventDocId: activeBooking.id, 
-                tier: activeBooking.tier, 
-                price: activeBooking.price, 
-                status: "pending", 
-                isUsed: false,
-                totalEntries: bookingQty,
-                remainingEntries: bookingQty,
-                timestamp: Date.now() 
-            });
-            alert(`Your pass for ${bookingQty} entries has been created!`); 
-            location.reload();
+            const btn = document.getElementById('final-confirm-btn');
+            btn.disabled = true;
+            btn.innerText = "PROCESSING...";
+
+            try {
+                await addDoc(collection(db, "tickets"), { 
+                    userId: auth.currentUser.uid, 
+                    buyerEmail: auth.currentUser.email, 
+                    buyerName: userProfile.name,
+                    eventName: activeBooking.title, 
+                    eventDocId: activeBooking.id, 
+                    tier: activeBooking.tier, 
+                    price: activeBooking.price, 
+                    status: "pending", 
+                    isUsed: false,
+                    totalEntries: bookingQty,
+                    remainingEntries: bookingQty,
+                    timestamp: Date.now() 
+                });
+                alert(`Your pass for ${bookingQty} entries has been created!`); 
+                location.reload();
+            } catch(e) {
+                alert("Booking failed: " + e.message);
+                btn.disabled = false;
+                btn.innerText = "COMPLETE BOOKING";
+            }
         };
 
         window.openQR = (tid) => { currentOpenTicketId = tid; const box = document.getElementById('zoom-qr-box'); box.innerHTML = ''; document.getElementById('qr-modal').classList.remove('hidden'); setTimeout(() => { new QRCode(box, { text: tid, width: 220, height: 220 }); }, 200); };
