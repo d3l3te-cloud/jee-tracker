@@ -98,7 +98,8 @@
 
         <div class="mb-10 pb-6 border-b border-white/5">
             <p id="user-display-name" class="text-xl font-bold text-white uppercase tracking-tighter">---</p>
-            <p id="user-display-birthday" class="text-[10px] uppercase tracking-widest text-purple-400 mt-1 opacity-60">---</p>
+            <p id="user-display-email" class="text-[11px] font-medium text-white/40 mb-1">---</p>
+            <p id="user-display-birthday" class="text-[10px] uppercase tracking-widest text-purple-400 opacity-60">---</p>
             <div id="bday-wish" class="hidden text-[10px] font-black uppercase text-pink-500 mt-2">🎂 Happy Birthday! 10% Discount Active</div>
         </div>
 
@@ -241,6 +242,7 @@
                 if(uDoc.exists()) {
                     userProfile = uDoc.data();
                     document.getElementById('user-display-name').innerText = userProfile.name;
+                    document.getElementById('user-display-email').innerText = userProfile.email;
                     document.getElementById('user-display-birthday').innerText = `DOB: ${userProfile.birthday}`;
                     
                     const today = new Date();
