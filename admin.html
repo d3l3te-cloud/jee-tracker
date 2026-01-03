@@ -187,23 +187,8 @@
         async function loadPending() {
             const q = query(collection(db, "tickets"), where("status", "==", "pending"));
             const snap = await getDocs(q);
-        
-            for (const d of snap.docs) {
-                const t = d.data();
-                await updateDoc(doc(db, "tickets", d.id), {
-                    status: "approved"
-                });
-                await updateDoc(doc(db, "events", t.eventDocId), {
-                    ticketCount: increment(t.totalEntries || 1)
-                });
-            }
-        
-            document.getElementById('ticket-list').innerHTML =
-                `<div class="text-center py-10 opacity-20 text-xs font-bold uppercase tracking-widest">
-                    All bookings are auto-approved
-                </div>`;
-        }
-
+            const list = document.getElementById('ticket-list'); 
+            list.innerHTML = snap.empty ? `<div class="text-center py-10 opacity-20 text-xs font-bold uppercase tracking-widest">No New Bookings</div>` : '';
 
             snap.forEach(d => {
                 const t = d.data();
@@ -224,33 +209,8 @@
         async function loadRefundRequests() {
             const q = query(collection(db, "tickets"), where("status", "==", "cancel_requested"));
             const snap = await getDocs(q);
-        
-            for (const d of snap.docs) {
-                const t = d.data();
-        
-                await updateDoc(doc(db, "tickets", d.id), {
-                    status: "refunded"
-                });
-        
-                await updateDoc(doc(db, "events", t.eventDocId), {
-                    ticketCount: increment(-(t.totalEntries || 1))
-                });
-        
-                await emailjs.send("service_ctg57ig", "template_cancellation", {
-                    to_email: t.buyerEmail,
-                    event_name: t.eventName,
-                    ticket_qty: t.totalEntries || 1,
-                    refund_amount: `₹${Number(t.refundAmount).toLocaleString()}`,
-                    cancellation_reason: "Ticket cancelled from your side",
-                    apology_clause: ""
-                });
-            }
-        
-            document.getElementById('refund-list').innerHTML =
-                `<div class="text-center py-10 opacity-20 text-xs font-bold uppercase tracking-widest">
-                    All refunds are auto-processed
-                </div>`;
-        }
+            const list = document.getElementById('refund-list');
+            list.innerHTML = snap.empty ? `<div class="text-center py-10 opacity-20 text-xs font-bold uppercase tracking-widest">No Refund Requests</div>` : '';
 
             snap.forEach(d => {
                 const t = d.data();
@@ -386,5 +346,3 @@
     </script>
 </body>
 </html>
-
-
