@@ -335,7 +335,7 @@
 
                     // Display Ticket History with Cancellation option
                     const hCard = document.createElement('div');
-                    const canCancel = t.status === 'pending';
+                    const canCancel = t.status === 'approved';
                     hCard.className = "glass-card history-card p-5 rounded-3xl flex justify-between items-center mb-3";
                     hCard.innerHTML = `
                         <div>
@@ -577,3 +577,4 @@
     </script>
 </body>
 </html>
+
